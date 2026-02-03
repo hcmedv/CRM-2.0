@@ -1,0 +1,24 @@
+# --- secrets / config ---
+/config/**
+!/config/README.md
+!/config/config.example.php
+
+# --- runtime data ---
+/data/**
+/log/**
+/logs/**
+/tmp/**
+/public/camera/tmp/**
+/public/camera/uploads/**
+
+# --- env ---
+**/*.env
+
+# --- deps ---
+/vendor/**
+/node_modules/**
+
+# --- editor/os ---
+.vscode/**
+.DS_Store
+Thumbs.db
