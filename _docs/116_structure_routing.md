@@ -46,6 +46,8 @@ Keine direkte Ausführung von:
 
 ## Routing-Arten
 
+
+
 ### 1) Seiten-Routen (HTML)
 
 - GET
@@ -88,6 +90,7 @@ Beispiele:
 ---
 
 ## Routing-Auflösung (logisch)
+Routing prüft vor Controller immer Auth/Role
 
 1. Request kommt an
 2. Session starten

@@ -58,6 +58,7 @@ Jedes Modul **muss liefern**:
 - Kein direktes Schreiben ins Event-Storage
 - Keine Merge-Entscheidungen
 - Keine Kenntnis anderer Module
+- „Was ein Modul nicht darf“ (z. B. Sessions, Redirects, HTML)
 
 ---
 

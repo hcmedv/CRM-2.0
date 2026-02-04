@@ -1,4 +1,4 @@
-# 119 – Structure: Logging & Debugging
+# 119 – Structure: Data Layout
 
 ## Ziel
 

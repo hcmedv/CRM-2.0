@@ -182,6 +182,22 @@ Beispiele:
 - `/kunden`
 - `/login`
 
+## Gemeinsamer Include-Bereich
+
+Jeder Webroot besitzt ein eigenes `_inc` Verzeichnis.
+
+CRM:
+- /public_crm/_inc/bootstrap.php
+- /public_crm/_inc/page_top.php
+- /public_crm/_inc/page_bottom.php
+- /public_crm/_inc/router.php
+- /public_crm/_inc/auth.php
+- /public_crm/_inc/helpers.php
+
+Regel:
+- Seiten laden ausschließlich bootstrap + page_top + page_bottom
+- Keine Modul- oder Seitenlogik im Include-Bereich
+
 ---
 
 ## Zusammenfassung
