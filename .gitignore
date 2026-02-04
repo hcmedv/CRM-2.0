@@ -1,6 +1,8 @@
 # --- secrets / config ---
 /config/**
+/_auth/**
 !/config/README.md
+!/_auth/README.md
 !/config/config.example.php
 
 # --- runtime data ---

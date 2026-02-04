@@ -30,6 +30,7 @@ Nachvollziehbarkeit zwischen Git, FTP und Subdomains.
 - Mitarbeiter-UI
 - Schreibend
 - Geschützt (Auth)
+- public_crm/api/ = technische Endpunkte (intern)
 
 ### `public_service/`
 - **Kunden-Portal**
@@ -37,6 +38,7 @@ Nachvollziehbarkeit zwischen Git, FTP und Subdomains.
 - Downloads (z. B. Kamera-Bilder, Serviceberichte)
 - Aktionen wie TV-Session starten
 - Keine direkte Schreiblogik
+- public_service/ = keine Endpunkte
 
 ---
 
