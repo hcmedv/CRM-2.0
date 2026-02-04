@@ -1,0 +1,296 @@
+/* Datei: /public_crm/assets/css/crm.css
+ * Zweck:
+ * - Globales Basis-Layout (Phase 4)
+ * - app-*, grid-block, card-block, login-block
+ * - Nur Bindestriche (kein CamelCase)
+ */
+
+:root{
+  --gap: 16px;
+  --radius: 12px;
+  --border: 1px solid rgba(0,0,0,.12);
+  --shadow: 0 6px 18px rgba(0,0,0,.06);
+  --pad: 16px;
+  --maxw: 1200px;
+  --font: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+
+*{ box-sizing:border-box; }
+
+html, body{
+  margin:0;
+  padding:0;
+  font-family: var(--font);
+  background:#f6f7f9;
+  color:#111;
+}
+
+a{ color:inherit; text-decoration:none; }
+
+.app{
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+}
+
+.app-header{
+  border-bottom: var(--border);
+  background:#fff;
+}
+
+.app-header__title{
+  max-width: var(--maxw);
+  margin:0 auto;
+  padding: 14px var(--pad) 0 var(--pad);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.app-header__meta{
+  max-width: var(--maxw);
+  margin:0 auto;
+  padding: 4px var(--pad) 14px var(--pad);
+  font-size: 12px;
+  opacity:.7;
+}
+
+.app-main{
+  width:100%;
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: var(--pad);
+  flex:1;
+}
+
+.app-footer{
+  border-top: var(--border);
+  background:#fff;
+}
+
+.app-footer__meta{
+  display:block;
+  max-width: var(--maxw);
+  margin:0 auto;
+  padding: 10px var(--pad);
+  font-size: 12px;
+  opacity:.7;
+}
+
+.grid-block{
+  display:grid;
+  gap: var(--gap);
+}
+
+/* Desktop: 3 oben, 1 unten breit */
+.grid-block--start{
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* Tablet */
+@media (max-width: 980px){
+  .grid-block--start{
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Mobile */
+@media (max-width: 620px){
+  .grid-block--start{
+    grid-template-columns: 1fr;
+  }
+}
+
+.card-block{
+  background:#fff;
+  border: var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow:hidden;
+}
+
+.card-block--wide{
+  grid-column: 1 / -1;
+}
+
+.card-block__title{
+  padding: 12px 14px;
+  font-weight: 700;
+  border-bottom: var(--border);
+  background: rgba(0,0,0,.02);
+}
+
+.card-block__body{
+  padding: 14px;
+  min-height: 90px;
+}
+
+.card-block__text{
+  margin: 0;
+  opacity: .8;
+}
+
+/* Login */
+.login-block{
+  max-width: 520px;
+  margin: 40px auto;
+}
+
+.login-block__form{
+  background:#fff;
+  border: var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+  display:grid;
+  gap: 12px;
+}
+
+.login-block__title{
+  font-size: 22px;
+  font-weight: 800;
+  margin: 0 0 6px 0;
+}
+
+.login-block__error{
+  border: 1px solid rgba(200,0,0,.25);
+  background: rgba(200,0,0,.06);
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.login-block__field{
+  display:grid;
+  gap: 6px;
+}
+
+.login-block__label{
+  font-size: 12px;
+  opacity: .8;
+}
+
+.login-block__input{
+  width:100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,.18);
+  outline: none;
+  background:#fff;
+}
+
+.login-block__input:focus{
+  border: 1px solid rgba(0,0,0,.35);
+}
+
+.login-block__btn{
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,.18);
+  background:#fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.login-block__btn:hover{
+  background: rgba(0,0,0,.04);
+}
+
+.app-header__row{
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 14px var(--pad);
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap: 12px;
+}
+
+.app-header__title,
+.app-header__meta{
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.app-header__right{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.app-header__user{
+  font-size: 12px;
+  opacity: .75;
+}
+
+.app-header__logout{
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,.18);
+  background:#fff;
+}
+
+.app-header__logout:hover{
+  background: rgba(0,0,0,.04);
+}
+
+.topnav-block{
+  border-top: var(--border);
+  border-bottom: var(--border);
+  background:#fff;
+}
+
+.topnav-block__inner{
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 10px var(--pad);
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.topnav-block__item{
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+}
+
+.topnav-block__item:hover{
+  background: rgba(0,0,0,.04);
+}
+
+.topnav-block__item--active{
+  border: 1px solid rgba(0,0,0,.18);
+  background: rgba(0,0,0,.03);
+}
+
+/* Unter-Navi (optional, pro Seite) */
+.subnav-block{
+  background:#fff;
+}
+
+.subnav-block__inner{
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 10px var(--pad);
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.subnav-block__chip{
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.18);
+  background:#fff;
+}
+
+.subnav-block__chip--active{
+  background: rgba(0,0,0,.04);
+}
+
