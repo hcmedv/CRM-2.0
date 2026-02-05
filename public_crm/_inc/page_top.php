@@ -60,7 +60,28 @@ if (defined('CRM_SUBNAV_HTML') && is_string(CRM_SUBNAV_HTML) && CRM_SUBNAV_HTML 
         <?php endforeach; ?>
       </div>
 
-      <div class="topnav__right">
+
+
+
+        <div class="topnav__right">
+
+        <!-- CTI Integration -->
+        <div class="cti2-nav" id="cti2">
+          <input class="cti2-input" id="cti2-q" placeholder="Kunde / Telefon suchen …" />
+          <div class="cti2-dd" id="cti2-dd">
+            <div class="cti2-list" id="cti2-list"></div>
+            <div class="cti2-detail" id="cti2-detail" hidden>
+              <div id="cti2-d-name" class="cti2-l1"></div>
+              <div id="cti2-d-sub" class="cti2-l2"></div>
+              <div class="cti2-actions">
+                <button class="cti2-btn" id="cti2-dial">Anrufen</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- User Integration -->
+
         <div class="userbox" id="crmUserBox">
           <button class="userbtn" type="button" aria-label="Benutzermenü" aria-haspopup="menu" aria-expanded="false">
             <svg viewBox="0 0 24 24" aria-hidden="true">

@@ -37,6 +37,33 @@ if (!is_array($__CRM_CONFIG)) {
 define('CRM_DEBUG', (bool)($__CRM_CONFIG['debug'] ?? false));
 define('CRM_ENV', (string)($__CRM_CONFIG['env'] ?? 'prod'));
 
+######## CONFIG HELPER ##################################################################################################################
+function CRM_CFG(string $key, mixed $default = null): mixed
+{
+    global $__CRM_CONFIG;
+    if (!is_array($__CRM_CONFIG)) return $default;
+    return array_key_exists($key, $__CRM_CONFIG) ? $__CRM_CONFIG[$key] : $default;
+}
+
+######## SETTINGS FILES #################################################################################################################
+function CFG_FILE(string $key, ?string $default = null): ?string
+{
+    $files = (array)CRM_CFG('files', []);
+    $v = $files[$key] ?? $default;
+    return is_string($v) ? $v : $default;
+}
+
+function CFG_FILE_REQ(string $key): string
+{
+    $v = CFG_FILE($key);
+    if (!$v) {
+        http_response_code(500);
+        echo "CRM config error: file '$key' not defined";
+        exit;
+    }
+    return $v;
+}
+
 ######## DEBUG / ERROR HANDLING #########################################################################################################
 
 if (CRM_DEBUG) {
@@ -62,11 +89,3 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
-######## CONFIG HELPER ##################################################################################################################
-
-function CRM_CFG(string $key, mixed $default = null): mixed
-{
-    global $__CRM_CONFIG;
-    if (!is_array($__CRM_CONFIG)) return $default;
-    return array_key_exists($key, $__CRM_CONFIG) ? $__CRM_CONFIG[$key] : $default;
-}
