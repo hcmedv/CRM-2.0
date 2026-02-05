@@ -1,3 +1,3 @@
 <?php
 
-echo "<h1>Startseite Subdomain Service</h>";
+echo "<h2>Startseite Subdomain Service</h2>";
