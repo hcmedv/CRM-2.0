@@ -37,7 +37,7 @@ if (defined('CRM_SUBNAV_HTML') && is_string(CRM_SUBNAV_HTML) && CRM_SUBNAV_HTML 
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= htmlspecialchars($title, ENT_QUOTES) ?></title>
-<link rel="stylesheet" href="/_inc/crm.css">
+<link rel="stylesheet" href="/_inc/assets/crm.css?v=1">
 <?php if (defined('CRM_DEBUG') && CRM_DEBUG): ?>
 <meta name="robots" content="noindex,nofollow">
 <?php endif; ?>

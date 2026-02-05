@@ -26,9 +26,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Login</title>
-<link rel="stylesheet" href="/_inc/crm.css">
+<link rel="stylesheet" href="/_inc/assets/crm.css">
 <style>
-  .login-wrap{ max-width: 520px; margin: 24px auto; }
+  .login-wrap{ max-width: 420px; margin: 24px auto; }
   .login-form{ display:grid; gap: 10px; max-width: 360px; }
   .login-form input{
     font: inherit;
@@ -62,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php if ($err !== ''): ?>
           <div class="login-err"><?= htmlspecialchars($err, ENT_QUOTES) ?></div>
         <?php endif; ?>
-
+        <img src="/_inc/img/logo.png" width="360" height="77" alt="HCM EDV">
         <form method="post" action="/login/" class="login-form" autocomplete="on">
           <input name="user" placeholder="Benutzer" autocomplete="username" required>
           <input name="pass" type="password" placeholder="Passwort" autocomplete="current-password" required>
@@ -72,7 +72,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
   </div>
 
-  <footer class="app-footer">CRM 2.0 · dev</footer>
+    <footer class="app-footer">
+    CRM 2.0
+  </footer>
 </main>
 
 </body>

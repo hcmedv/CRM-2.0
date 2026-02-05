@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /*
- * Datei: /public_crm/_pages/404.php
+ * Datei: /public_crm/_inc/pages/404.php
  * Zweck:
  * - Zentrale 404-Seite
  * - Einheitliches Layout
@@ -20,3 +20,4 @@ require_once __DIR__ . '/../_inc/page_top.php';
 
 <?php
 require_once __DIR__ . '/../_inc/page_bottom.php';
+ 

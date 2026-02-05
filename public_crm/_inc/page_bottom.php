@@ -15,7 +15,7 @@ $appVer = (string)CRM_CFG('app_version', 'dev');
   </div>
 
   <footer class="app-footer">
-    CRM 2.0 · <?= htmlspecialchars($appVer, ENT_QUOTES) ?>
+   &copy; /// HCM EDV GmbH · CRM 2.0 · <?= htmlspecialchars($appVer, ENT_QUOTES) ?>
   </footer>
 </main>
 
