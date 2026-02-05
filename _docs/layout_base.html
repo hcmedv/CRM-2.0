@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CRM – Layout Test</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Header: full width, aber Inhalt über .bar__inner auf Content-Breite ausgerichtet -->
+  <header class="app-header">
+    <div class="topnav bar">
+      <div class="bar__inner topnav__inner">
+        <div class="topnav__left">
+          <a class="topnav__item topnav__item--active" href="#">Start</a>
+          <a class="topnav__item" href="#">Vorgänge</a>
+          <a class="topnav__item" href="#">Dokumente</a>
+          <a class="topnav__item" href="#">Stammdaten</a>
+          <a class="topnav__item" href="#">Verwaltung</a>
+        </div>
+        <div class="topnav__right">
+          <span class="topnav__user">Thomas Buss</span>
+          <a class="topnav__logout" href="#">Logout</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="subnav bar">
+      <div class="bar__inner subnav__inner">
+        <a class="subnav__chip subnav__chip--active" href="#">Übersicht</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- App-Rahmen nur für Content + Footer -->
+  <main class="app">
+    <div class="page-block">
+      <div class="grid grid--start">
+        <section class="card">
+          <div class="card__title">Vorgänge</div>
+          <div class="card__body"></div>
+        </section>
+
+        <section class="card">
+          <div class="card__title">Dokumente</div>
+          <div class="card__body"></div>
+        </section>
+
+        <section class="card">
+          <div class="card__title">Stammdaten</div>
+          <div class="card__body"></div>
+        </section>
+
+        <section class="card card--wide">
+          <div class="card__title">Status</div>
+          <div class="card__body">index.html</div>
+        </section>
+
+        <div style="height:600px;"></div>
+      </div>
+    </div>
+
+    <footer class="app-footer">
+      CRM 2.0 · dev
+    </footer>
+  </main>
+
+</body>
+</html>

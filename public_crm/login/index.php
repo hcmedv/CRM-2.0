@@ -1,60 +1,79 @@
 <?php
 declare(strict_types=1);
 
-/*
- * Datei: /public/login/index.php
- * Zweck:
- * - CRM-Login separat
- * - Prüft credentials gegen /data/login/mitarbeiter.json
- * - Setzt Session und leitet weiter
- */
-
-define('CRM_PAGE_TITLE', 'Login');
-
-require_once __DIR__ . '/../_inc/bootstrap.php';
+require_once dirname(__DIR__) . '/_inc/bootstrap.php';
 require_once CRM_ROOT . '/_inc/auth.php';
 
 if (CRM_Auth_IsLoggedIn()) {
-    header('Location: /');
+    header('Location: /index.php');
     exit;
 }
 
-$error = '';
-
+$err = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $u = trim((string)($_POST['user'] ?? ''));
     $p = (string)($_POST['pass'] ?? '');
-
-    if ($u !== '' && $p !== '' && CRM_Auth_Login($u, $p)) {
-        header('Location: /');
+    if (!CRM_Auth_Login($u, $p)) {
+        $err = 'Login fehlgeschlagen';
+    } else {
+        header('Location: /index.php');
         exit;
     }
-    $error = 'Login fehlgeschlagen';
 }
+?><!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Login</title>
+<link rel="stylesheet" href="/_inc/crm.css">
+<style>
+  .login-wrap{ max-width: 520px; margin: 24px auto; }
+  .login-form{ display:grid; gap: 10px; max-width: 360px; }
+  .login-form input{
+    font: inherit;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(0,0,0,.16);
+    background: #fffbd1;
+    outline: none;
+  }
+  .login-form input:focus{ border-color: rgba(0,123,255,.55); box-shadow: 0 0 0 3px rgba(0,123,255,.12); }
+  .login-form button{
+    font: inherit;
+    font-weight: 700;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(0,0,0,.16);
+    background: #fff;
+    cursor: pointer;
+  }
+  .login-form button:hover{ background: rgba(0,0,0,.04); }
+  .login-err{ margin-bottom:10px; color:#b00020; font-weight:700; }
+</style>
+</head>
+<body>
 
-require_once CRM_ROOT . '/_inc/page_top.php';
-?>
+<main class="app login-wrap">
+  <div class="page-block">
+    <div class="card card--wide">
+      <div class="card__title">Login</div>
+      <div class="card__body">
+        <?php if ($err !== ''): ?>
+          <div class="login-err"><?= htmlspecialchars($err, ENT_QUOTES) ?></div>
+        <?php endif; ?>
 
-<div class="login-block">
-  <form method="post" class="login-block__form" autocomplete="off">
-    <div class="login-block__title">CRM Login</div>
-
-    <?php if ($error !== ''): ?>
-      <div class="login-block__error"><?= htmlspecialchars($error, ENT_QUOTES) ?></div>
-    <?php endif; ?>
-
-    <div class="login-block__field">
-      <label class="login-block__label" for="user">Benutzer</label>
-      <input class="login-block__input" id="user" name="user" required>
+        <form method="post" action="/login/" class="login-form" autocomplete="on">
+          <input name="user" placeholder="Benutzer" autocomplete="username" required>
+          <input name="pass" type="password" placeholder="Passwort" autocomplete="current-password" required>
+          <button type="submit">Anmelden</button>
+        </form>
+      </div>
     </div>
+  </div>
 
-    <div class="login-block__field">
-      <label class="login-block__label" for="pass">Passwort</label>
-      <input class="login-block__input" id="pass" name="pass" type="password" required>
-    </div>
+  <footer class="app-footer">CRM 2.0 · dev</footer>
+</main>
 
-    <button class="login-block__btn" type="submit">Login</button>
-  </form>
-</div>
-
-<?php require_once CRM_ROOT . '/_inc/page_bottom.php'; ?>
+</body>
+</html>

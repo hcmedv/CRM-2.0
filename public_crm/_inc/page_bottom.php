@@ -4,25 +4,20 @@ declare(strict_types=1);
 /*
  * Datei: /public_crm/_inc/page_bottom.php
  * Zweck:
- * - Einheitlicher Seitenabschluss
+ * - Schließt page-block
+ * - Rendert Footer innerhalb des App-Rahmens
+ * - Schließt HTML
  */
 
-$appVer = (string)CRM_CFG('app_version', '');
+$appVer = (string)CRM_CFG('app_version', 'dev');
+
 ?>
+  </div>
 
+  <footer class="app-footer">
+    CRM 2.0 · <?= htmlspecialchars($appVer, ENT_QUOTES) ?>
+  </footer>
 </main>
-
-<footer class="app-footer">
-  <?php if ($appVer !== ''): ?>
-    <span class="app-footer__meta"><?= htmlspecialchars($appVer, ENT_QUOTES) ?></span>
-  <?php endif; ?>
-</footer>
-
-</div>
-
-<?php if (defined('CRM_DEBUG') && CRM_DEBUG): ?>
-<!-- DEBUG ACTIVE -->
-<?php endif; ?>
 
 </body>
 </html>
