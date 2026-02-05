@@ -88,6 +88,86 @@ a{ color:inherit; text-decoration:none; }
   padding-right: 10px;
 }
 
+/* ================= User Menu (Flyout) ================= */
+
+.userbox{
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.userbtn{
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,.16);
+  background: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  line-height: 1;
+}
+.userbtn:hover{ background: rgba(0,0,0,.04); }
+
+.userbtn svg{
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.userfly{
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  min-width: 220px;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,.14);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.10);
+  overflow: hidden;
+  display: none;
+  z-index: 2000;
+}
+
+.userbox.is-open .userfly{ display: block; }
+
+.userfly__head{
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  border-bottom: 1px solid rgba(0,0,0,.12);
+  background: rgba(0,0,0,.02);
+}
+
+.userfly__body{
+  padding: 10px 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.userfly__muted{
+  font-size: 11px;
+  opacity: .7;
+}
+
+.userfly__logout{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,.16);
+  background: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+}
+.userfly__logout:hover{ background: rgba(0,0,0,.04); }
+
+
 .topnav__user{ font-size:11px; opacity:.7; }
 .topnav__logout{
   font-size:11px;

@@ -61,9 +61,25 @@ if (defined('CRM_SUBNAV_HTML') && is_string(CRM_SUBNAV_HTML) && CRM_SUBNAV_HTML 
       </div>
 
       <div class="topnav__right">
-        <span class="topnav__user"><?= htmlspecialchars($userName, ENT_QUOTES) ?></span>
-        <a class="topnav__logout" href="/login/logout.php">Logout</a>
+        <div class="userbox" id="crmUserBox">
+          <button class="userbtn" type="button" aria-label="Benutzermenü" aria-haspopup="menu" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="M12 12a4 4 0 1 0-4-4a4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/>
+            </svg>
+          </button>
+
+          <div class="userfly" role="menu" aria-label="Benutzermenü">
+            <div class="userfly__head">Angemeldet</div>
+            <div class="userfly__body">
+              <?php if ($userName !== ''): ?>
+                <div class="userfly__muted"><?= htmlspecialchars($userName, ENT_QUOTES) ?></div>
+              <?php endif; ?>
+              <a class="userfly__logout" href="/login/logout.php" role="menuitem">Abmelden</a>
+            </div>
+          </div>
+        </div>
       </div>
+
     </div>
   </div>
 
