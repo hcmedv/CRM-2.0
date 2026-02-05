@@ -66,6 +66,14 @@ function CFG_FILE_REQ(string $key): string
 
 ######## DEBUG / ERROR HANDLING #########################################################################################################
 
+$entry = basename($_SERVER['SCRIPT_NAME'] ?? 'unknown.php');
+$entry = preg_replace('/[^a-zA-Z0-9_.-]/', '_', $entry);
+
+$phpErrorLog = CRM_BASE . '/log/php_' . $entry . '.log';
+
+ini_set('log_errors', '1');
+ini_set('error_log', $phpErrorLog);
+
 if (CRM_DEBUG) {
     error_reporting(E_ALL);
     ini_set('display_errors', '1');
@@ -74,12 +82,28 @@ if (CRM_DEBUG) {
     ini_set('display_errors', '0');
 }
 
+/*
+ * Zusätzliche Absicherung:
+ * - Uncaught Exceptions -> error_log()
+ * - Fatals (Shutdown)   -> error_log()
+ */
+set_exception_handler(function (Throwable $e): void {
+    error_log('[EXCEPTION] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+});
+
+register_shutdown_function(function (): void {
+    $e = error_get_last();
+    if ($e && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        error_log('[FATAL] ' . $e['message'] . ' in ' . $e['file'] . ':' . $e['line']);
+    }
+});
+
 ######## SESSION TIME LOGOUT ############################################################################################################
 
 $ttl = (int)CRM_CFG('session_ttl_sec', 0);
 if ($ttl > 0) {
     ini_set('session.gc_maxlifetime', (string)$ttl);
-    ini_set('session.cookie_lifetime', (string)$ttl);
+    ini_set('session.cookie_lifetime', '0'); // Browser-Session-Cookie (Logout wird über Guard erzwungen)
 }
 
 ######## SESSION START ##################################################################################################################
@@ -89,3 +113,111 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
+######## SESSION GUARD (IDLE + MAX LIFETIME + IP PROFIL) ###############################################################################
+
+function CRM_GetRemoteIp(): string
+{
+    $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+    return trim($ip);
+}
+
+function CRM_IpIsWhitelisted(string $ip): bool
+{
+    $wl = (array)CRM_CFG('session_ip_whitelist', []);
+    foreach ($wl as $allowed) {
+        if (!is_string($allowed)) { continue; }
+        if (trim($allowed) === $ip) { return true; }
+    }
+    return false;
+}
+
+function CRM_IsApiRequest(): bool
+{
+    $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+    if (strpos($uri, '/api/') !== false) { return true; }
+
+    $accept = (string)($_SERVER['HTTP_ACCEPT'] ?? '');
+    if (stripos($accept, 'application/json') !== false) { return true; }
+
+    return false;
+}
+
+function CRM_SessionDestroyAndExit(): void
+{
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION = [];
+        if (ini_get('session.use_cookies')) {
+            $p = session_get_cookie_params();
+            setcookie(session_name(), '', time() - 42000, $p['path'], $p['domain'], (bool)$p['secure'], (bool)$p['httponly']);
+        }
+        session_destroy();
+    }
+
+    if (CRM_IsApiRequest()) {
+        http_response_code(401);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => false, 'error' => 'auth_required'], JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    header('Location: /login/login.php');
+    exit;
+}
+
+function CRM_SessionGuard(): void
+{
+    $now = time();
+
+    $ip = CRM_GetRemoteIp();
+    $isOffice = CRM_IpIsWhitelisted($ip);
+
+    $idleOffice   = (int)CRM_CFG('session_idle_timeout_office_sec', 0);
+    $idleRemote   = (int)CRM_CFG('session_idle_timeout_remote_sec', 0);
+    $idleFallback = (int)CRM_CFG('session_idle_timeout_sec', 0);
+
+    $idle = 0;
+    if ($isOffice && $idleOffice > 0) { $idle = $idleOffice; }
+    elseif (!$isOffice && $idleRemote > 0) { $idle = $idleRemote; }
+    else { $idle = $idleFallback; }
+
+    $max = (int)CRM_CFG('session_max_lifetime_sec', 0);
+
+    if (!isset($_SESSION['login_at']) || !is_int($_SESSION['login_at'])) {
+        $_SESSION['login_at'] = $now;
+    }
+    if (!isset($_SESSION['last_activity']) || !is_int($_SESSION['last_activity'])) {
+        $_SESSION['last_activity'] = $now;
+    }
+
+    if ($max > 0) {
+        $loginAt = (int)$_SESSION['login_at'];
+        if (($now - $loginAt) > $max) {
+            CRM_SessionDestroyAndExit();
+        }
+    }
+
+    if ($idle > 0) {
+        $last = (int)$_SESSION['last_activity'];
+        if (($now - $last) > $idle) {
+            CRM_SessionDestroyAndExit();
+        }
+    }
+
+    $_SESSION['last_activity']   = $now;
+    $_SESSION['session_profile'] = $isOffice ? 'office' : 'remote';
+}
+
+CRM_SessionGuard();
+
+######## JSON Datei einlesen ############################################################################################################
+
+function CRM_LoadJsonFile(string $file, array $default = []): array
+{
+    if (!is_file($file)) return $default;
+
+    $raw = (string)file_get_contents($file);
+    if (trim($raw) === '') return $default;
+
+    $j = json_decode($raw, true);
+    return is_array($j) ? $j : $default;
+}

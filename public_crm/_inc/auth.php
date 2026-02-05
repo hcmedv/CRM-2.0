@@ -99,4 +99,14 @@ function CRM_Auth_TouchSession(): void
     $_SESSION['crm_last_activity'] = $now;
 }
 
+function CRM_Auth_RequireLoginApi(): void
+{
+    if (!CRM_Auth_IsLoggedIn()) {
+        http_response_code(401);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => false, 'error' => 'unauthorized'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
 
+    CRM_Auth_TouchSession();
+}

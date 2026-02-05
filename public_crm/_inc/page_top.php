@@ -38,6 +38,16 @@ if (defined('CRM_SUBNAV_HTML') && is_string(CRM_SUBNAV_HTML) && CRM_SUBNAV_HTML 
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= htmlspecialchars($title, ENT_QUOTES) ?></title>
 <link rel="stylesheet" href="/_inc/assets/crm.css?v=1">
+
+<?php
+$mods = (array)CRM_CFG('modules', []);
+$ctiEnabled = (bool)($mods['cti'] ?? false);
+?>
+<?php if ($ctiEnabled): ?>
+<link rel="stylesheet" href="/cti/assets/crm_cti_v2.css?v=1"></link>
+<script defer src="/cti/assets/crm_cti_v2.js?v=1"></script>
+<?php endif; ?>
+
 <?php if (defined('CRM_DEBUG') && CRM_DEBUG): ?>
 <meta name="robots" content="noindex,nofollow">
 <?php endif; ?>
@@ -60,10 +70,14 @@ if (defined('CRM_SUBNAV_HTML') && is_string(CRM_SUBNAV_HTML) && CRM_SUBNAV_HTML 
         <?php endforeach; ?>
       </div>
 
-
-
-
         <div class="topnav__right">
+
+        <!-- End CTI Integration aus Modul Übersicht der settings--> 
+        <?php
+        $mods = (array)CRM_CFG('modules', []);
+        $ctiEnabled = (bool)($mods['cti'] ?? false);
+        ?>
+        <?php if ($ctiEnabled): ?>
 
         <!-- CTI Integration -->
         <div class="cti2-nav" id="cti2">
@@ -79,6 +93,10 @@ if (defined('CRM_SUBNAV_HTML') && is_string(CRM_SUBNAV_HTML) && CRM_SUBNAV_HTML 
             </div>
           </div>
         </div>
+
+        <?php endif; ?> 
+        <!-- End CTI Integration aus Modul Übersicht der settings--> 
+
 
         <!-- User Integration -->
 
