@@ -31,20 +31,20 @@ if (defined('CRM_SUBNAV_HTML') && is_string(CRM_SUBNAV_HTML) && CRM_SUBNAV_HTML 
     $subnavHtml = CRM_SUBNAV_HTML;
 }
 
+$mods = (array)CRM_CFG('modules', []);
+$ctiEnabled = (bool)($mods['cti'] ?? false);
+
 ?><!DOCTYPE html>
 <html lang="de">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= htmlspecialchars($title, ENT_QUOTES) ?></title>
+
 <link rel="stylesheet" href="/_inc/assets/crm.css?v=1">
 
-<?php
-$mods = (array)CRM_CFG('modules', []);
-$ctiEnabled = (bool)($mods['cti'] ?? false);
-?>
 <?php if ($ctiEnabled): ?>
-<link rel="stylesheet" href="/cti/assets/crm_cti_v2.css?v=1"></link>
+<link rel="stylesheet" href="/cti/assets/crm_cti_v2.css?v=1">
 <script defer src="/cti/assets/crm_cti_v2.js?v=1"></script>
 <?php endif; ?>
 
@@ -70,36 +70,25 @@ $ctiEnabled = (bool)($mods['cti'] ?? false);
         <?php endforeach; ?>
       </div>
 
-        <div class="topnav__right">
+      <div class="topnav__right">
 
-        <!-- End CTI Integration aus Modul Übersicht der settings--> 
-        <?php
-        $mods = (array)CRM_CFG('modules', []);
-        $ctiEnabled = (bool)($mods['cti'] ?? false);
-        ?>
         <?php if ($ctiEnabled): ?>
-
         <!-- CTI Integration -->
         <div class="cti2-nav" id="cti2">
           <input class="cti2-input" id="cti2-q" placeholder="Kunde / Telefon suchen …" />
           <div class="cti2-dd" id="cti2-dd">
             <div class="cti2-list" id="cti2-list"></div>
-            <div class="cti2-detail" id="cti2-detail" hidden>
-              <div id="cti2-d-name" class="cti2-l1"></div>
-              <div id="cti2-d-sub" class="cti2-l2"></div>
-              <div class="cti2-actions">
-                <button class="cti2-btn" id="cti2-dial">Anrufen</button>
-              </div>
+
+            <!-- Statuszeile (fixe Höhe, kein Springen) -->
+            <div class="cti2-status" id="cti2-status">
+              <span class="cti2-status__text"></span>
             </div>
           </div>
         </div>
-
-        <?php endif; ?> 
-        <!-- End CTI Integration aus Modul Übersicht der settings--> 
-
+        <!-- End CTI Integration -->
+        <?php endif; ?>
 
         <!-- User Integration -->
-
         <div class="userbox" id="crmUserBox">
           <button class="userbtn" type="button" aria-label="Benutzermenü" aria-haspopup="menu" aria-expanded="false">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -117,8 +106,8 @@ $ctiEnabled = (bool)($mods['cti'] ?? false);
             </div>
           </div>
         </div>
-      </div>
 
+      </div>
     </div>
   </div>
 

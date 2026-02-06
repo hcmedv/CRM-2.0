@@ -5,14 +5,20 @@ declare(strict_types=1);
  * Datei: /public/_inc/bootstrap.php
  * Zweck:
  * - Settings laden (config/settings_crm.php -> return array)
- * - Debug/Error Handling schaltbar
- * - Session starten
- * - Basis-Konstanten/Helper
+ * - Module Settings Auto-Import: /config/<modul>/settings_<modul>.php (wenn modules[modul] === true)
+ * - Module Secrets Auto-Import:  /config/<modul>/secrets_<modul>.php  (wenn modules[modul] === true)
+ * - Secrets werden separat gehalten (__CRM_SECRETS), Zugriff über CRM_SECRET()
+ * - Debug/Error Handling (pro Script eigenes php_*.log)
+ * - Session starten + Session-Guard (Idle/Max/IP-Profil)
+ * - Basis-Helper (CRM_CFG, CFG_FILE_REQ, CRM_LoadJsonFile)
+ *
+ * Konvention:
+ * - Secrets-Keys sind lowercase (z.B. 'sipgate_cti') und Tokens ebenso (token_id, token_secret, ...)
  */
 
 ######## BASIS PFADE ####################################################################################################################
 
-$PUBLIC = dirname(__DIR__);          // /public
+$PUBLIC = dirname(__DIR__);          // /public (z.B. /public_crm)
 $BASE   = dirname($PUBLIC);          // Projekt-Root
 
 define('CRM_ROOT', $PUBLIC);
@@ -34,8 +40,134 @@ if (!is_array($__CRM_CONFIG)) {
     exit;
 }
 
-define('CRM_DEBUG', (bool)($__CRM_CONFIG['debug'] ?? false));
-define('CRM_ENV', (string)($__CRM_CONFIG['env'] ?? 'prod'));
+######## MODULE SETTINGS + SECRETS AUTO-IMPORT ###########################################################################################
+
+$__CRM_SECRETS   = [];
+$__CRM_BOOT_WARN = [];
+
+/*
+ * 0001 - CRM_ArrayMergeRecursiveDistinct
+ * Rekursives Merge zweier Arrays:
+ * - Keys aus $b überschreiben $a
+ * - Arrays werden rekursiv gemerged
+ * - Numerische Arrays werden ersetzt (kein Merge), um Dubletten zu vermeiden
+ */
+function CRM_ArrayMergeRecursiveDistinct(array $a, array $b): array
+{
+    foreach ($b as $k => $v) {
+        if (is_int($k)) { $a[$k] = $v; continue; }
+
+        if (isset($a[$k]) && is_array($a[$k]) && is_array($v)) {
+            $a[$k] = CRM_ArrayMergeRecursiveDistinct($a[$k], $v);
+        } else {
+            $a[$k] = $v;
+        }
+    }
+    return $a;
+}
+
+/*
+ * 0002 - CRM_LoadModuleSettingsAndSecrets
+ * Lädt für jedes aktivierte Modul (modules[modul] === true) best-effort:
+ * - CRM_BASE . '/config/<modul>/settings_<modul>.php'
+ * - CRM_BASE . '/config/<modul>/secrets_<modul>.php'
+ *
+ * Verhalten:
+ * - Fehlende Dateien sind NICHT fatal (nur Warnung)
+ * - Exceptions werden abgefangen (CRM bleibt lauffähig)
+ * - Settings werden in $__CRM_CONFIG gemerged
+ * - Secrets werden pro Modul in $__CRM_SECRETS[<modul>] gespeichert
+ */
+function CRM_LoadModuleSettingsAndSecrets(array $baseConfig): array
+{
+    global $__CRM_SECRETS, $__CRM_BOOT_WARN;
+
+    if (!defined('CRM_BASE')) return $baseConfig;
+
+    $mods = $baseConfig['modules'] ?? [];
+    if (!is_array($mods)) return $baseConfig;
+
+    foreach ($mods as $module => $enabled) {
+        if (!(bool)$enabled) continue;
+
+        $module = trim((string)$module);
+        if ($module === '') continue;
+
+        $dir = CRM_BASE . '/config/' . $module;
+
+        // settings_<modul>.php
+        $settingsFile = $dir . '/settings_' . $module . '.php';
+        if (is_file($settingsFile)) {
+            try {
+                $add = require $settingsFile;
+                if (is_array($add)) {
+                    $baseConfig = CRM_ArrayMergeRecursiveDistinct($baseConfig, $add);
+                } else {
+                    $__CRM_BOOT_WARN[] = '[CRM] settings invalid return (not array): ' . $settingsFile;
+                }
+            } catch (Throwable $e) {
+                $__CRM_BOOT_WARN[] = '[CRM] settings exception: ' . $settingsFile . ' :: ' . $e->getMessage();
+            }
+        } else {
+            $__CRM_BOOT_WARN[] = '[CRM] settings missing (ok): ' . $settingsFile;
+        }
+
+        // secrets_<modul>.php
+        $secretsFile = $dir . '/secrets_' . $module . '.php';
+        if (is_file($secretsFile)) {
+            try {
+                $sec = require $secretsFile;
+                if (is_array($sec)) {
+                    $__CRM_SECRETS[$module] = $sec;
+                } else {
+                    $__CRM_BOOT_WARN[] = '[CRM] secrets invalid return (not array): ' . $secretsFile;
+                }
+            } catch (Throwable $e) {
+                $__CRM_BOOT_WARN[] = '[CRM] secrets exception: ' . $secretsFile . ' :: ' . $e->getMessage();
+            }
+        } else {
+            $__CRM_BOOT_WARN[] = '[CRM] secrets missing (ok): ' . $secretsFile;
+        }
+    }
+
+    return $baseConfig;
+}
+
+$__CRM_CONFIG = CRM_LoadModuleSettingsAndSecrets($__CRM_CONFIG);
+
+/*
+ * 0003 - CRM_SECRET
+ * Zugriff auf modulare Secrets.
+ *
+ * Pfadnotation:
+ * - "cti.sipgate_cti.token_id"
+ *   ^mod ^key-in-secrets ^token-key
+ *
+ * Rückgabe:
+ * - default, wenn nicht vorhanden
+ */
+function CRM_SECRET(string $path, mixed $default = null): mixed
+{
+    global $__CRM_SECRETS;
+
+    $path = trim($path);
+    if ($path === '') return $default;
+
+    $parts = explode('.', $path);
+    if (count($parts) < 2) return $default;
+
+    $mod = trim((string)array_shift($parts));
+    if ($mod === '' || !isset($__CRM_SECRETS[$mod]) || !is_array($__CRM_SECRETS[$mod])) return $default;
+
+    $cur = $__CRM_SECRETS[$mod];
+    foreach ($parts as $p) {
+        $k = trim((string)$p);
+        if ($k === '' || !is_array($cur) || !array_key_exists($k, $cur)) return $default;
+        $cur = $cur[$k];
+    }
+
+    return $cur;
+}
 
 ######## CONFIG HELPER ##################################################################################################################
 function CRM_CFG(string $key, mixed $default = null): mixed
@@ -44,6 +176,11 @@ function CRM_CFG(string $key, mixed $default = null): mixed
     if (!is_array($__CRM_CONFIG)) return $default;
     return array_key_exists($key, $__CRM_CONFIG) ? $__CRM_CONFIG[$key] : $default;
 }
+
+######## CORE FLAGS #####################################################################################################################
+
+define('CRM_DEBUG', (bool)CRM_CFG('debug', false));
+define('CRM_ENV', (string)CRM_CFG('env', 'prod'));
 
 ######## SETTINGS FILES #################################################################################################################
 function CFG_FILE(string $key, ?string $default = null): ?string
@@ -82,11 +219,11 @@ if (CRM_DEBUG) {
     ini_set('display_errors', '0');
 }
 
-/*
- * Zusätzliche Absicherung:
- * - Uncaught Exceptions -> error_log()
- * - Fatals (Shutdown)   -> error_log()
- */
+// Boot-Warnungen jetzt loggen (erst hier ist error_log sauber gesetzt)
+if (isset($__CRM_BOOT_WARN) && is_array($__CRM_BOOT_WARN) && !empty($__CRM_BOOT_WARN)) {
+    foreach ($__CRM_BOOT_WARN as $w) { error_log($w); }
+}
+
 set_exception_handler(function (Throwable $e): void {
     error_log('[EXCEPTION] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
 });

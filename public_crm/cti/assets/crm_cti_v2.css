@@ -1,100 +1,146 @@
-/* CTI V2 – komplett isoliert */
-.cti2-nav{ position:relative; width:260px; max-width:42vw; }
+/* CTI V2 – isoliert (Nav Search + Dropdown) */
+
+.cti2-nav{
+  position:relative;
+  width:260px;
+  max-width:42vw;
+}
+
 .cti2-input{
-  width:100%; border:1px solid #d6d6d6; border-radius:10px;
-  padding:7px 10px; font-size:13px; outline:none;
+  width:100%;
+  box-sizing:border-box;
+  border:1px solid #d6d6d6;
+  border-radius:10px;
+  padding:7px 10px;
+  font-size:13px;
+  line-height:1.2;
+  outline:none;
 }
 .cti2-input:focus{ border-color:#9bbcff; }
 
 .cti2-dd{
-  position:absolute; top:calc(100% + 6px); right:0;
-  width:420px; max-width:calc(100vw - 24px);
-  background:#fff; border:1px solid #e6e6e6; border-radius:12px;
-  box-shadow:0 10px 26px rgba(0,0,0,.12);
-  display:none; z-index:3000; overflow:hidden;
+  position:absolute;
+  top:calc(100% + 6px);
+  right:0;
+
+  width:420px;
+  max-width:calc(100vw - 24px);
+
+  background:#fff;
+  border:1px solid #e6e6e6;
+  border-radius:12px;
+  box-shadow:0 10px 26px rgba(0,0,0,0.12);
+
+  display:none;
+  z-index:3000;
+  overflow:hidden;
 }
 .cti2-dd.is-open{ display:block; }
 
-.cti2-list{ max-height:280px; overflow:auto; }
+.cti2-list{
+  max-height:280px;
+  overflow:auto;
+}
+
+/* Item */
 .cti2-item{
-  display:flex; gap:10px; padding:10px 12px; cursor:pointer;
-  border-top:1px solid #f1f1f1; align-items:center;
+  display:flex;
+  gap:10px;
+  padding:10px 12px;
+  cursor:pointer;
+  border-top:1px solid #f1f1f1;
+  align-items:center;
 }
 .cti2-item:first-child{ border-top:none; }
 .cti2-item:hover{ background:#f4f7ff; }
-.cti2-item.is-active{ background:#e9f2ff; }
 
-.cti2-ava{ width:34px; height:34px; border-radius:999px; background:#eee; flex:0 0 34px; }
 .cti2-lines{ flex:1 1 auto; min-width:0; }
-.cti2-l1{ font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.cti2-l2{ color:#666; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-
-.cti2-detail{
-  border-top:1px solid rgba(0,0,0,.08);
-  padding:10px 12px; background:#fafafa;
-}
-.cti2-actions{ display:flex; gap:8px; margin-top:8px; }
-.cti2-btn{
-  border:1px solid #d6d6d6; background:#fff; border-radius:10px;
-  padding:7px 10px; font-size:13px; cursor:pointer;
-}
-.cti2-btn:disabled{ opacity:.5; cursor:not-allowed; }
-
-/* CTI V2 – Nummernliste */
-.cti2-phones{
-  margin-top:6px;
-  display:flex;
-  flex-direction:column;
-  gap:4px;
-}
-.cti2-phone{
-  font-size:13px;
-  color:#333;
-  line-height:1.25;
-}
-.cti2-phone--primary{
-  font-weight:700;
-}
-.cti2-phone--muted{
-  color:#777;
-  font-size:12px;
-}
-
-.cti2-chip {
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 6px;
-  margin-left: auto;
-  opacity: .7;
-}
-.cti2-chip--customer { background:#e6f0ff; color:#2458d3; }
-.cti2-chip--m365     { background:#eaf7ef; color:#2e7d32; }
 
 .cti2-l1{
+  font-weight:700;
+}
+.cti2-l2{
+  margin-top:2px;
+  color:#666;
+  font-size:12px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+/* Zeile 1 als Row: Text links, Badge rechts – ohne Layoutsprung */
+.cti2-l1--row{
   display:flex;
   align-items:center;
   gap:8px;
 }
 
-.cti2-chip{
-  margin-left:auto;     /* rechtsbündig */
-  white-space:nowrap;
-}
-
-.cti2-lines{ min-width:0; }  /* wichtig für ellipsis in flex */
-
-.cti2-l1,
-.cti2-l2{
-  overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap;
-}
-
-.cti2-l1 .cti2-title{
-  overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap;
+.cti2-ellipsis{
   min-width:0;
+  flex:1 1 auto;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }
 
+/* Badge */
+.cti2-chip{
+  flex:0 0 auto;
+  white-space:nowrap;
+  font-size:11px;
+  padding:2px 6px;
+  border-radius:6px;
+  opacity:.85;
+}
 
+.cti2-chip--customer{ background:#e6f0ff; color:#2458d3; }
+.cti2-chip--m365{ background:#eaf7ef; color:#2e7d32; }
+.cti2-chip--direct{ background:#fff3cd; color:#7a5a00; }
+
+/* Nummernliste */
+.cti2-phones{
+  margin-top:6px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
+.cti2-phone{
+  width:100%;
+  text-align:center;
+  border:1px solid #b9b9b9;
+  background:#f1f3f6;
+  border-radius:6px;
+  padding:4px 8px;
+  font-size:13px;
+  color:#111;
+  cursor:pointer;
+}
+.cti2-phone:hover{ background:#e9edf3; }
+
+.cti2-phone--muted{
+  color:#777;
+  font-size:12px;
+  margin-top:4px;
+}
+
+/* Statuszeile (fixe Höhe → kein Springen) */
+.cti2-status{
+  height:28px;
+  padding:4px 10px;
+  border-top:1px solid rgba(0,0,0,0.06);
+  font-size:12px;
+  display:flex;
+  align-items:center;
+  color:#666;
+}
+
+.cti2-status__text{
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.cti2-status--busy{ color:#0b5ed7; }
+.cti2-status--ok{ color:#198754; }
+.cti2-status--error{ color:#dc3545; }

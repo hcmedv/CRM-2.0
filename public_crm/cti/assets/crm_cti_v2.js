@@ -2,57 +2,122 @@
  * Datei: /public_crm/cti/assets/crm_cti_v2.js
  *
  * Zweck:
- * - Zentrale, globale CTI-Suchleiste im Top-Header (immer sichtbar)
- * - Live-Suche nach Kunden, Kontakten und Telefonnummern
- * - Click-to-Dial per Klick auf Telefonnummer
- *
- * Datenquellen / Endpoints:
- * - Suche: GET /api/crm/api_crm_search_customers.php?q=…&mode=cti
- * - Dial:  POST /cti/crm_cti_dial.php   Body: { "number": "+49..." }
- *
- * Verhalten:
- * - Debounce (200 ms)
- * - Klick außerhalb: Dropdown schließen + Input zurücksetzen
- * - ESC: Dropdown schließen + Input zurücksetzen
+ * - Globale CTI-Suchleiste im Top-Header
+ * - Live-Suche (Kunde/M365) + Direktwahl für frei eingegebene Nummern
+ * - Click-to-Dial (Sipgate) über /cti/crm_cti_dial.php
  */
 
 (() => {
   const root = document.getElementById('cti2');
   if (!root) return;
 
-  const q    = document.getElementById('cti2-q');
-  const dd   = document.getElementById('cti2-dd');
-  const list = document.getElementById('cti2-list');
+  const q      = document.getElementById('cti2-q');
+  const dd     = document.getElementById('cti2-dd');
+  const list   = document.getElementById('cti2-list');
+  const status = document.getElementById('cti2-status'); // vorhanden via page_top.php
+
   if (!q || !dd || !list) return;
 
   let t = null;
 
-  const open  = () => dd.classList.add('is-open');
-  const close = () => dd.classList.remove('is-open');
-
-  const resetUi = () => {
-    close();
-    q.value = '';
+  const open = () => dd.classList.add('is-open');
+  const close = () => {
+    dd.classList.remove('is-open');
     list.innerHTML = '';
+    setStatus('', '');
+    q.value = '';
   };
 
-  const FN_Dial = async (number) => {
-    const n = String(number || '').trim();
-    if (!n) return;
+  const setStatus = (txt, type = '') => {
+    if (!status) return;
+    const elTxt = status.querySelector('.cti2-status__text');
+    if (elTxt) elTxt.textContent = txt;
+    status.className = 'cti2-status' + (type ? (' ' + type) : '');
+  };
 
-    await fetch('/cti/crm_cti_dial.php', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ number: n })
+  const isPhoneQuery = (s) => {
+    const d = String(s || '').replace(/\D+/g, '');
+    return d.length >= 3;
+  };
+
+  const normalizeDial = (s) => {
+    let x = String(s || '').trim();
+    if (!x) return '';
+    x = x.replace(/[^\d+]/g, '');
+    return x;
+  };
+
+  const renderDirectDial = (rawQuery) => {
+    const dial = normalizeDial(rawQuery);
+    if (!dial) return;
+
+    const el = document.createElement('div');
+    el.className = 'cti2-item cti2-item--direct';
+
+    el.innerHTML = `
+      <div class="cti2-lines">
+        <div class="cti2-l1 cti2-l1--row">
+          <span class="cti2-ellipsis">Nummer anrufen: ${dial}</span>
+          <span class="cti2-chip cti2-chip--direct">Direkt</span>
+        </div>
+        <div class="cti2-phones">
+          <button class="cti2-phone" data-dial="${dial}" type="button">${dial}</button>
+        </div>
+      </div>
+      <div class="cti2-status" id="cti2-status">
+        <span class="cti2-status__text"></span>
+      </div>
+    `;
+
+    list.appendChild(el);
+  };
+
+  const renderResults = (items) => {
+    (items || []).forEach(it => {
+      const el = document.createElement('div');
+      el.className = 'cti2-item';
+
+      const badge =
+        it.source === 'customer'
+          ? '<span class="cti2-chip cti2-chip--customer">Kunde</span>'
+          : '<span class="cti2-chip cti2-chip--m365">M365</span>';
+
+      const phones = it.phones || [];
+      const phonesHtml = phones.length
+        ? `<div class="cti2-phones">` +
+          phones.map(p => `
+            <button class="cti2-phone" data-dial="${p.dial}" type="button">${p.number}</button>
+          `).join('') +
+          `</div>`
+        : `<div class="cti2-phone--muted">keine Telefonnummer</div>`;
+
+      el.innerHTML = `
+        <div class="cti2-lines">
+          <div class="cti2-l1 cti2-l1--row">
+            <span class="cti2-ellipsis">${it.name || it.company || ''}</span>
+            ${badge}
+          </div>
+          <div class="cti2-l2">${it.company || ''}</div>
+          ${phonesHtml}
+        </div>
+      `;
+
+      list.appendChild(el);
     });
   };
+
+  /* ---------------- Suche ---------------- */
 
   q.addEventListener('input', () => {
     clearTimeout(t);
 
     const v = q.value.trim();
-    if (v.length < 2) { close(); return; }
+    if (v.length < 2) {
+      list.innerHTML = '';
+      dd.classList.remove('is-open');
+      setStatus('', '');
+      return;
+    }
 
     t = setTimeout(async () => {
       try {
@@ -64,80 +129,51 @@
         const j = await r.json();
         list.innerHTML = '';
 
-        (j.items || []).forEach(it => {
-          const el = document.createElement('div');
-          el.className = 'cti2-item';
+        if (isPhoneQuery(v)) {
+          renderDirectDial(v);
+        }
 
-          const src = String(it.source || '').toLowerCase();
-          const badge =
-            src === 'customer'
-              ? '<span class="cti2-chip cti2-chip--customer">Kunde</span>'
-              : src === 'm365'
-                ? '<span class="cti2-chip cti2-chip--m365">M365</span>'
-                : '';
-
-          const phones = (it.phones || []);
-          const phonesHtml = phones.length
-            ? `<div class="cti2-phones">` +
-              phones.map(p => `
-                <div class="cti2-phone ${p.dial === it.primary_phone ? 'cti2-phone--primary' : ''}"
-                     data-dial="${String(p.dial || '')}">
-                  ${p.number}
-                  ${p.label ? `<span class="cti2-phone--muted"> · ${p.label}</span>` : ''}
-                </div>
-              `).join('') +
-              `</div>`
-            : `<div class="cti2-phone--muted">keine Telefonnummer</div>`;
-
-          el.innerHTML = `
-            <div class="cti2-ava"></div>
-            <div class="cti2-lines">
-              <div class="cti2-l1">
-                <span class="cti2-title">${it.name || it.company || ''}</span>
-                ${badge}
-              </div>
-              <div class="cti2-l2">${it.company || ''}</div>
-              ${phonesHtml}
-            </div>
-          `;
-
-          // Click-to-Dial: nur auf Telefonnummern
-          el.querySelectorAll('.cti2-phone[data-dial]').forEach(ph => {
-            ph.addEventListener('click', async (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-
-              const number = String(ph.dataset.dial || '').trim();
-              if (!number) return;
-
-              try {
-                await FN_Dial(number);
-              } catch (err) {
-                // bewusst still (optional später Toast/Log)
-              }
-            });
-          });
-
-          list.appendChild(el);
-        });
+        renderResults(j.items || []);
 
         open();
-      } catch (e) {
+      } catch {
         close();
       }
     }, 200);
   });
 
-  // ESC im Input: schließen + reset
-  q.addEventListener('keydown', e => {
-    if (e.key === 'Escape') {
-      resetUi();
-      q.blur();
+  /* ---------------- Dial ---------------- */
+
+  list.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-dial]');
+    if (!btn) return;
+
+    const number = String(btn.dataset.dial || '').trim();
+    if (!number) return;
+
+    setStatus('Wählt …', 'cti2-status--busy');
+
+    try {
+      const r = await fetch('/cti/crm_cti_dial.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number })
+      });
+
+      const j = await r.json();
+      if (j && j.ok) {
+        setStatus('Wahl gestartet', 'cti2-status--ok');
+      } else {
+        setStatus('Dial fehlgeschlagen', 'cti2-status--error');
+      }
+    } catch {
+      setStatus('Dial fehlgeschlagen', 'cti2-status--error');
     }
   });
 
-  // Klick außerhalb: schließen + reset (Input leeren, damit neue Suche ohne markieren möglich ist)
-  document.addEventListener('click', e => {
-    if (!e.target.closest('#cti2')) resetUi();
+  /* Klick außerhalb */
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#cti2')) close();
   });
 })();
