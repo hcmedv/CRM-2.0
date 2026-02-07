@@ -9,52 +9,129 @@ declare(strict_types=1);
  *
  * Export:
  * - RULES_TEAMVIEWER_BuildPatch(array $tv): array
- *
- * Normierung (TeamViewer):
- * - raw.support_session_type bleibt int (RAW unverändert)
- * - meta.teamviewer._norm.support_type wird String (kanonisch):
- *   - support_session_type = 1  => devicename gefüllt ? 'remote' : 'adhoc'
- *   - support_session_type = 2  => 'meeting'
- *   - support_session_type = 3  => 'file'
- *   - support_session_type = 4  => 'vpn'
- *   - support_session_type = 6  => 'web'
- *   - sonst => 'unknown'
  */
 
 function RULES_TEAMVIEWER_BuildPatch(array $tv): array
 {
-    $devicename = (string)($tv['devicename'] ?? $tv['deviceName'] ?? $tv['device_name'] ?? '');
-    $groupname  = (string)($tv['groupname'] ?? $tv['groupName'] ?? $tv['group_name'] ?? $tv['group'] ?? '');
-    $notes      = (string)($tv['notes'] ?? $tv['note'] ?? $tv['description'] ?? '');
+    $devicename = (string)($tv['devicename'] ?? $tv['deviceName'] ?? '');
+    $group      = (string)($tv['groupname'] ?? $tv['groupName'] ?? $tv['group'] ?? '');
+    $notesRaw   = (string)($tv['notes'] ?? '');
 
-    // Title: bevorzugt DeviceName, sonst fallback
-    $title = $devicename !== '' ? $devicename : 'Fernwartung';
+    // Titel
+    $title = $devicename;
+    if ($title === '') {
+        $title = (string)($tv['subject'] ?? $tv['description'] ?? 'Fernwartung');
+    }
+    if ($title === '') {
+        $title = 'Fernwartung';
+    }
 
-    // Zeitstempel: TeamViewer liefert i.d.R. start_date/end_date (ISO Zulu)
-    $startedAt = RULES_TEAMVIEWER_ParseTimestamp($tv['start_date'] ?? $tv['startTime'] ?? $tv['started_at'] ?? 0);
-    $endedAt   = RULES_TEAMVIEWER_ParseTimestamp($tv['end_date']   ?? $tv['endTime']   ?? $tv['ended_at']   ?? 0);
+    // Zeiten (TeamViewer liefert meist ISO-Zulu)
+    $startedAt = 0;
+    $endedAt   = 0;
 
-    // KN Extraktion (best-effort): "#10032" oder "KN 10032" aus groupname/notes
+    $startIso = (string)($tv['start_date'] ?? $tv['startDate'] ?? '');
+    $endIso   = (string)($tv['end_date'] ?? $tv['endDate'] ?? '');
+
+    if ($startIso !== '') {
+        $ts = strtotime($startIso);
+        if ($ts !== false) { $startedAt = (int)$ts; }
+    }
+    if ($endIso !== '') {
+        $ts = strtotime($endIso);
+        if ($ts !== false) { $endedAt = (int)$ts; }
+    }
+
+    // KN Extraktion (best-effort): "#10032" oder "KN 10032"
     $kn = null;
-    $hay = trim($groupname . "\n" . $notes);
-    if ($hay !== '' && preg_match('/(?:#|kn\s*)(\d{4,6})/i', $hay, $m)) {
-        $kn = (string)$m[1];
+    $hay = $group . "\n" . $notesRaw . "\n" . (string)($tv['description'] ?? '');
+    if (preg_match('/(?:#|kn\s*)(\d{4,6})/i', $hay, $m)) {
+        $kn = $m[1];
     }
 
-    // Support-Type Normierung
-    $rawType = (int)($tv['support_session_type'] ?? $tv['supportSessionType'] ?? 0);
-    $supportType = RULES_TEAMVIEWER_NormalizeSupportType($rawType, $devicename);
+    // -------------------------------------------------
+    // Tags & Notes Normalisierung
+    // Regeln:
+    // - Tag-Zeile nur wenn erste Zeile mindestens ein '#' enthält
+    // - Wenn keine Tag-Zeile: komplette Notes bleiben Notes
+    // - Wenn Tag-Zeile: Notes sind nur Zeile 2+
+    // -------------------------------------------------
 
-    // Tags (minimal + ableitung)
-    $tags = ['teamviewer'];
-    if ($supportType === 'adhoc') {
-        $tags[] = 'adhoc';
-    } elseif ($supportType === 'web') {
-        $tags[] = 'web';
+    $notesNorm = str_replace(["\r\n", "\r"], "\n", (string)$notesRaw);
+
+    $firstLine = $notesNorm;
+    $restLines = '';
+
+    $nlPos = strpos($notesNorm, "\n");
+    if ($nlPos !== false) {
+        $firstLine = substr($notesNorm, 0, $nlPos);
+        $restLines = substr($notesNorm, $nlPos + 1);
     }
 
-    // Ref: Session-ID für Idempotenz
-    $sid = (string)($tv['id'] ?? $tv['sessionId'] ?? $tv['session_id'] ?? '');
+    $hasTagLine = (strpos($firstLine, '#') !== false);
+
+    // ---- TAGS (nur wenn Tag-Zeile) ----
+    $tagsNorm = [];
+    if ($hasTagLine) {
+        if (preg_match_all('/#\s*([^#]+)/', $firstLine, $mm)) {
+            foreach ($mm[1] as $tag) {
+                $tag = trim((string)$tag);
+                if ($tag === '') { continue; }
+
+                $tag = preg_replace('/\s+/', ' ', $tag);
+                $tag = mb_strtolower($tag);
+
+                // KN / reine Nummern-Hashtags nicht als Tag übernehmen
+                if (preg_match('/^\d{4,6}$/', $tag)) { continue; }
+
+                $tagsNorm[] = $tag;
+            }
+        }
+        $tagsNorm = array_values(array_unique($tagsNorm));
+    }
+
+    // ---- NOTES Quelle abhängig von Tag-Zeile ----
+    $notesSource = $hasTagLine ? (string)$restLines : (string)$notesNorm;
+    $notesClean  = trim($notesSource);
+
+    if ($notesClean !== '') {
+        $notesClean = str_replace(["\r\n", "\r"], "\n", $notesClean);
+        $notesClean = preg_replace("/[ \t]+/", " ", $notesClean);
+        $notesClean = preg_replace("/\n{2,}/", "\n", $notesClean);
+        $notesClean = trim($notesClean);
+    }
+
+    // Support-Type Normalisierung:
+    $supportSessionType = (int)($tv['support_session_type'] ?? $tv['supportSessionType'] ?? 0);
+
+    $supportType = 'unknown';
+    switch ($supportSessionType) {
+        case 1:
+            $supportType = ($devicename !== '') ? 'remote' : 'adhoc';
+            break;
+        case 2:
+            $supportType = 'meeting';
+            break;
+        case 3:
+            $supportType = 'file';
+            break;
+        case 4:
+            $supportType = 'vpn';
+            break;
+        case 6:
+            $supportType = 'web';
+            break;
+        default:
+            $supportType = 'unknown';
+            break;
+    }
+
+    // Display-Tags (UI): immer teamviewer
+    $displayTags = ['teamviewer'];
+    $displayTags = array_values(array_unique($displayTags));
+
+    // Geräte/Session-ID als Ref (Idempotenz)
+    $sid = (string)($tv['id'] ?? $tv['sessionId'] ?? '');
     $refs = [];
     if ($sid !== '') {
         $refs[] = ['ns' => 'teamviewer', 'id' => $sid];
@@ -66,7 +143,7 @@ function RULES_TEAMVIEWER_BuildPatch(array $tv): array
         'display' => [
             'title'    => $title,
             'subtitle' => '',
-            'tags'     => array_values(array_unique($tags)),
+            'tags'     => $displayTags,
             'customer' => $kn ? ['number' => $kn] : null,
         ],
         'timing' => [
@@ -82,71 +159,33 @@ function RULES_TEAMVIEWER_BuildPatch(array $tv): array
                     'kn'           => $kn,
                     'devicename'   => $devicename,
                     'support_type' => $supportType,
+                    'tags'         => $tagsNorm,
+                    'notes'        => $notesClean,
                 ],
             ],
         ],
     ];
 
-    // Nulls entfernen
+    // Nulls entschärfen
     $patch['display'] = array_filter($patch['display'], fn($v) => $v !== null);
-    $patch['timing']  = array_filter($patch['timing'],  fn($v) => $v !== null);
+    $patch['timing']  = array_filter($patch['timing'], fn($v) => $v !== null);
+
+    // _norm: leere Strings/Nulls entfernen (tags als Array behalten, aber leer entfernen)
+    if (isset($patch['meta']['teamviewer']['_norm']) && is_array($patch['meta']['teamviewer']['_norm'])) {
+        $n = $patch['meta']['teamviewer']['_norm'];
+
+        foreach (['kn','devicename','support_type','notes'] as $k) {
+            if (!array_key_exists($k, $n)) { continue; }
+            if ($n[$k] === null) { unset($n[$k]); continue; }
+            if (is_string($n[$k]) && trim($n[$k]) === '') { unset($n[$k]); continue; }
+        }
+
+        if (isset($n['tags']) && is_array($n['tags']) && count($n['tags']) === 0) {
+            unset($n['tags']);
+        }
+
+        $patch['meta']['teamviewer']['_norm'] = $n;
+    }
 
     return $patch;
-}
-
-/*
- * RULES_TEAMVIEWER_ParseTimestamp
- * Akzeptiert int (epoch) oder ISO-String und liefert epoch seconds (UTC).
- */
-function RULES_TEAMVIEWER_ParseTimestamp(mixed $v): int
-{
-    if (is_int($v)) {
-        return $v > 0 ? $v : 0;
-    }
-
-    if (is_numeric($v)) {
-        $n = (int)$v;
-        return $n > 0 ? $n : 0;
-    }
-
-    $s = trim((string)$v);
-    if ($s === '') {
-        return 0;
-    }
-
-    $ts = strtotime($s);
-    return $ts !== false ? (int)$ts : 0;
-}
-
-/*
- * RULES_TEAMVIEWER_NormalizeSupportType
- * Mapping gemäß Vorgabe:
- * - 1 => remote|adhoc (devicename gefüllt => remote, sonst adhoc)
- * - 2 => meeting
- * - 3 => file
- * - 4 => vpn
- * - 6 => web
- * - default => unknown
- */
-function RULES_TEAMVIEWER_NormalizeSupportType(int $rawType, string $devicename): string
-{
-    switch ($rawType) {
-        case 1:
-            return (trim($devicename) !== '') ? 'remote' : 'adhoc';
-
-        case 2:
-            return 'meeting';
-
-        case 3:
-            return 'file';
-
-        case 4:
-            return 'vpn';
-
-        case 6:
-            return 'web';
-
-        default:
-            return 'unknown';
-    }
 }

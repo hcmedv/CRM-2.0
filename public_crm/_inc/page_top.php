@@ -39,13 +39,15 @@ $ctiEnabled = (bool)($mods['cti'] ?? false);
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/favicon.ico">
+
 <title><?= htmlspecialchars($title, ENT_QUOTES) ?></title>
 
 <link rel="stylesheet" href="/_inc/assets/crm.css?v=1">
 
 <?php if ($ctiEnabled): ?>
-<link rel="stylesheet" href="/cti/assets/crm_cti_v2.css?v=1">
-<script defer src="/cti/assets/crm_cti_v2.js?v=1"></script>
+<link rel="stylesheet" href="/cti/assets/crm_cti.css?v=1">
+<script defer src="/cti/assets/crm_cti_search.js?v=1"></script>
 <?php endif; ?>
 
 <?php if (defined('CRM_DEBUG') && CRM_DEBUG): ?>
@@ -125,17 +127,20 @@ $ctiEnabled = (bool)($mods['cti'] ?? false);
                 <div class="userfly__muted"><?= htmlspecialchars($userName, ENT_QUOTES) ?></div>
               <?php endif; ?>
 
-              <div class="userstatus" data-userstatus>
-                <div class="userfly__muted" style="margin-bottom:6px;">Status</div>
+                <div class="userstatus" data-userstatus>
 
-                <div class="userstatus__row">
-                  <button class="chip chip--work" type="button" data-userstatus-set="online">Verfügbar</button>
-                  <button class="chip chip--wait" type="button" data-userstatus-set="busy">Beschäftigt</button>
-                  <button class="chip chip--closed" type="button" data-userstatus-set="away">Abwesend</button>
+                  <div class="userstatus__head">
+                    <div class="userfly__muted">Status:</div>
+                    <div class="userfly__muted userstatus__msg" id="crmUserStatusMsg" aria-live="polite"></div>
+                  </div>
+
+                  <div class="userstatus__row">
+                    <button class="chip chip--work" type="button" data-userstatus-set="online">Verfügbar</button>
+                    <button class="chip chip--wait" type="button" data-userstatus-set="busy">Beschäftigt</button>
+                    <button class="chip chip--closed" type="button" data-userstatus-set="away">Abwesend</button>
+                  </div>
+
                 </div>
-
-                <div class="userfly__muted" id="crmUserStatusMsg" style="margin-top:6px;"></div>
-              </div>
 
               <a class="userfly__logout" href="/login/logout.php" role="menuitem">Abmelden</a>
             </div>

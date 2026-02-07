@@ -220,21 +220,14 @@ if ($caller === '') { $caller = trim((string)($sip['default_device'] ?? '')); }
 $useSipgateDefault = (bool)($sip['use_sipgate_default_device'] ?? true);
 
 /* -------------------- Secrets -------------------- */
-/*
- * Robust:
- * - Variante A (namespaced): cti.<secretKey>.token_id
- * - Variante B (flat):       <secretKey>.token_id
- */
-$tokenId = (string)CRM_SECRET('cti.' . $secretKey . '.token_id', '');
-if ($tokenId === '') { $tokenId = (string)CRM_SECRET($secretKey . '.token_id', ''); }
-
+$tokenId     = (string)CRM_SECRET('cti.' . $secretKey . '.token_id', '');
 $tokenSecret = (string)CRM_SECRET('cti.' . $secretKey . '.token_secret', '');
-if ($tokenSecret === '') { $tokenSecret = (string)CRM_SECRET($secretKey . '.token_secret', ''); }
 
 if ($tokenId === '' || $tokenSecret === '') {
     FN_Log($debug, 'dial_reject_missing_secrets', ['secret_key' => $secretKey]);
     FN_Out(['ok' => false, 'error' => 'missing_secrets', 'secret_key' => $secretKey], 500);
 }
+
 
 /* -------------------- Sipgate: /users (defaultDevice) -------------------- */
 

@@ -84,3 +84,21 @@
   box-shadow:0 0 0 2px rgba(0,0,0,.18) inset;
   font-weight:600;
 }
+
+.userstatus__head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:6px;
+}
+
+/* Platz reservieren -> kein Springen */
+.userstatus__msg{
+  min-width:140px;           /* ggf. anpassen */
+  text-align:right;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  min-height:1.2em;          /* fix */
+}
