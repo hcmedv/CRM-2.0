@@ -1,6 +1,7 @@
-/* Datei: /public_crm/_inc/crm.css
- * Referenzlayout (FIX) – final (mit deinen 2 Anpassungen)
- */
+/* =================================================================================================
+   Datei: /public_crm/_inc/crm.css
+   Stand: Layout Referenz + CTI/User Fixes (aufgeräumt)
+   ================================================================================================= */
 
 :root{
   --gap: 16px;
@@ -29,7 +30,9 @@ body{
 
 a{ color:inherit; text-decoration:none; }
 
-/* ================= Header ================= */
+/* =================================================================================================
+   1) HEADER / BARS
+   ================================================================================================= */
 
 .app-header{
   position: sticky;
@@ -54,6 +57,7 @@ a{ color:inherit; text-decoration:none; }
 .topnav{
   border-bottom: var(--border);
 }
+
 .topnav__inner{
   display:flex;
   align-items:center;
@@ -61,12 +65,19 @@ a{ color:inherit; text-decoration:none; }
   gap:12px;
   padding: 10px 0;
 }
+
+/* Links: darf wachsen & schrumpfen (wichtig für CTI) */
 .topnav__left{
   display:flex;
   gap:14px;
+  flex: 1 1 auto;
+  min-width: 0;
   flex-wrap: wrap;
   padding-left: 10px;
 }
+
+
+
 .topnav__item{
   font-size:13px;
   font-weight:700;
@@ -74,21 +85,68 @@ a{ color:inherit; text-decoration:none; }
   border-radius:6px;
   border:1px solid transparent;
 }
+
 .topnav__item:hover{ background: rgba(0,0,0,.04); }
+
 .topnav__item--active{
   background: rgba(162,190,229,.35);
   border-color: rgba(0,123,255,.22);
 }
 
+/* Rechts: kein Umbruch (CTI + User) */
 .topnav__right{
   display:flex;
   align-items:center;
   gap:10px;
+  flex: 0 0 auto;
   white-space:nowrap;
   padding-right: 10px;
 }
 
-/* ================= User Menu (Flyout) ================= */
+.topnav__user{ font-size:11px; opacity:.7; }
+
+.topnav__logout{
+  font-size:11px;
+  padding:3px 7px;
+  border-radius:8px;
+  border:1px solid rgba(0,0,0,.16);
+  background:#fff;
+}
+
+.topnav__logout:hover{ background: rgba(0,0,0,.04); }
+
+/* Subnav */
+.subnav{
+  background: var(--bg-main);
+  border-bottom: var(--border);
+}
+
+.subnav__inner{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  padding:8px 0;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.subnav__chip{
+  font-size:11px;
+  padding:4px 8px;
+  border-radius:10px;
+  border:1px solid transparent;
+}
+
+.subnav__chip:hover{ background: rgba(0,0,0,.04); }
+
+.subnav__chip--active{
+  background: rgba(162,190,229,.35);
+  border-color: rgba(0,123,255,.22);
+}
+
+/* =================================================================================================
+   2) USER MENU (FLYOUT)
+   ================================================================================================= */
 
 .userbox{
   position: relative;
@@ -108,6 +166,7 @@ a{ color:inherit; text-decoration:none; }
   cursor: pointer;
   line-height: 1;
 }
+
 .userbtn:hover{ background: rgba(0,0,0,.04); }
 
 .userbtn svg{
@@ -165,45 +224,12 @@ a{ color:inherit; text-decoration:none; }
   cursor: pointer;
   text-decoration: none;
 }
+
 .userfly__logout:hover{ background: rgba(0,0,0,.04); }
 
-
-.topnav__user{ font-size:11px; opacity:.7; }
-.topnav__logout{
-  font-size:11px;
-  padding:3px 7px;
-  border-radius:8px;
-  border:1px solid rgba(0,0,0,.16);
-  background:#fff;
-}
-.topnav__logout:hover{ background: rgba(0,0,0,.04); }
-
-/* Subnav */
-.subnav{
-  background: var(--bg-main);
-  border-bottom: var(--border);
-}
-.subnav__inner{
-  display:flex;
-  gap:8px;
-  flex-wrap:wrap;
-  padding:8px 0;
-  padding-left: 10px;
-  padding-right: 10px;
-}
-.subnav__chip{
-  font-size:11px;
-  padding:4px 8px;
-  border-radius:10px;
-  border:1px solid transparent;
-}
-.subnav__chip:hover{ background: rgba(0,0,0,.04); }
-.subnav__chip--active{
-  background: rgba(162,190,229,.35);
-  border-color: rgba(0,123,255,.22);
-}
-
-/* ================= App ================= */
+/* =================================================================================================
+   3) APP SHELL
+   ================================================================================================= */
 
 .app{
   max-width: var(--maxw);
@@ -228,18 +254,23 @@ a{ color:inherit; text-decoration:none; }
   opacity:.7;
 }
 
-/* ================= Grid & Cards ================= */
+/* =================================================================================================
+   4) GRID & CARDS
+   ================================================================================================= */
 
 .grid{
   display:grid;
   gap: var(--gap);
 }
+
 .grid--start{
   grid-template-columns: repeat(3, 1fr);
 }
+
 @media (max-width: 980px){
   .grid--start{ grid-template-columns: repeat(2, 1fr); }
 }
+
 @media (max-width: 620px){
   .grid--start{ grid-template-columns: 1fr; }
   .topnav__inner{ align-items:flex-start; }
@@ -252,19 +283,24 @@ a{ color:inherit; text-decoration:none; }
   box-shadow: var(--shadow);
   overflow:hidden;
 }
+
 .card--wide{ grid-column: 1 / -1; }
+
 .card__title{
   padding:10px 12px;
   font-weight:700;
   border-bottom: var(--border);
   background: rgba(0,0,0,.02);
 }
+
 .card__body{
   padding:12px;
   min-height:90px;
 }
 
-/* ================= Forms (Login etc.) ================= */
+/* =================================================================================================
+   5) FORMS / BUTTONS
+   ================================================================================================= */
 
 .form{
   display:grid;
@@ -303,9 +339,7 @@ a{ color:inherit; text-decoration:none; }
   cursor: pointer;
 }
 
-.btn:hover{
-  background: rgba(0,0,0,.04);
-}
+.btn:hover{ background: rgba(0,0,0,.04); }
 
 .form-error{
   margin-bottom:10px;
@@ -313,16 +347,24 @@ a{ color:inherit; text-decoration:none; }
   font-weight:700;
 }
 
+/* =================================================================================================
+   6) CTI TOPNAV LAYOUT – RESPONSIVE (CLEAN)
+   WICHTIG:
+   - Es darf KEINE weiteren .cti2-nav / Breiten-Regeln (insb. !important) geben,
+     sonst wird das wieder überschrieben.
+   ================================================================================================= */
 
-/* CTI Suchfeld Wrapper */
+   /* Wrapper in der Topnav: nicht 100% breit ziehen */
 .cti2-nav{
   position: relative;
+  flex: 0 0 auto;            /* wichtig: kein Flex-Grow */
+  max-width: 360px;          /* Desktop/large default */
 }
 
-/* Suchfeld */
+/* Input: nicht 100% (sonst zieht er den Wrapper breit) */
 .cti2-input{
   width: 100%;
-  padding-right: 96px;   /* Platz für Countdown */
+  padding-right: 96px;       /* Platz für Countdown */
 }
 
 /* Countdown im Input */
@@ -336,5 +378,41 @@ a{ color:inherit; text-decoration:none; }
   pointer-events: none;
   white-space: nowrap;
   opacity: .85;
+}
+
+/* ---------- Mobile Portrait (z. B. iPhone 12/13) ---------- */
+@media (max-width: 520px){
+  .cti2-nav{
+    max-width: 220px;        /* <- hier feinjustieren (200–240) */
+  }
+}
+
+/* ---------- Mobile Landscape ---------- */
+@media (max-width: 900px) and (orientation: landscape){
+  .cti2-nav{
+    max-width: 320px;
+  }
+}
+
+/* CTI in Topnav hart begrenzen (Mobile) */
+.topnav__right .cti2-nav{
+  flex: 0 0 320px !important;
+  width: 320px !important;
+  max-width: 260px !important;
+}
+
+/* wichtig bei Flex: sonst überläuft/ignoriert er Breiten */
+.topnav__right .cti2-nav .cti2-input{
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+/* Landscape etwas breiter */
+@media (max-width: 900px) and (orientation: landscape){
+  .topnav__right .cti2-nav{
+    flex-basis: 320px !important;
+    width: 320px !important;
+    max-width: 320px !important;
+  }
 }
 
