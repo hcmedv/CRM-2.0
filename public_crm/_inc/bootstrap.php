@@ -7,13 +7,14 @@ declare(strict_types=1);
  * - Settings laden (config/settings_crm.php -> return array)
  * - Module Settings Auto-Import: /config/<modul>/settings_<modul>.php (wenn modules[modul] === true)
  * - Module Secrets Auto-Import:  /config/<modul>/secrets_<modul>.php  (wenn modules[modul] === true)
- * - Secrets werden separat gehalten (__CRM_SECRETS), Zugriff über CRM_SECRET()
+ * - Secrets werden separat gehalten (__CRM_SECRET), Zugriff über CRM_SECRET() / CRM_MOD_SECRET()
  * - Debug/Error Handling (pro Script eigenes php_*.log)
  * - Session starten + Session-Guard (Idle/Max/IP-Profil)
  * - Basis-Helper (CRM_CFG, CFG_FILE_REQ, CRM_LoadJsonFile)
  *
  * Konvention:
- * - Secrets-Keys sind lowercase (z.B. 'sipgate_cti') und Tokens ebenso (token_id, token_secret, ...)
+ * - settings_<modul>.php liefert: return ['<modul>' => [ ... ]];
+ * - secrets_<modul>.php  liefert: return ['<modul>' => [ ... ]];
  */
 
 ######## BASIS PFADE ####################################################################################################################
@@ -42,7 +43,7 @@ if (!is_array($__CRM_CONFIG)) {
 
 ######## MODULE SETTINGS + SECRETS AUTO-IMPORT ###########################################################################################
 
-$__CRM_SECRETS   = [];
+$__CRM_SECRET    = [];
 $__CRM_BOOT_WARN = [];
 
 /*
@@ -76,22 +77,27 @@ function CRM_ArrayMergeRecursiveDistinct(array $a, array $b): array
  * - Fehlende Dateien sind NICHT fatal (nur Warnung)
  * - Exceptions werden abgefangen (CRM bleibt lauffähig)
  * - Settings werden in $__CRM_CONFIG gemerged
- * - Secrets werden pro Modul in $__CRM_SECRETS[<modul>] gespeichert
+ * - Secrets werden pro Modul in $__CRM_SECRET[<modul>] gespeichert
+ *
+ * WICHTIG (Einheitliche Secrets-Struktur):
+ * - secrets_<modul>.php liefert: return ['<modul>' => ['api_token'=>...]]
+ * - Im Bootstrap wird automatisch die innere Ebene ['<modul>'] extrahiert,
+ *   damit CRM_SECRET('<modul>.api_token') funktioniert.
  */
 function CRM_LoadModuleSettingsAndSecrets(array $baseConfig): array
 {
-    global $__CRM_SECRETS, $__CRM_BOOT_WARN;
+    global $__CRM_SECRET, $__CRM_BOOT_WARN;
 
-    if (!defined('CRM_BASE')) return $baseConfig;
+    if (!defined('CRM_BASE')) { return $baseConfig; }
 
     $mods = $baseConfig['modules'] ?? [];
-    if (!is_array($mods)) return $baseConfig;
+    if (!is_array($mods)) { return $baseConfig; }
 
     foreach ($mods as $module => $enabled) {
-        if (!(bool)$enabled) continue;
+        if (!(bool)$enabled) { continue; }
 
         $module = trim((string)$module);
-        if ($module === '') continue;
+        if ($module === '') { continue; }
 
         $dir = CRM_BASE . '/config/' . $module;
 
@@ -117,8 +123,16 @@ function CRM_LoadModuleSettingsAndSecrets(array $baseConfig): array
         if (is_file($secretsFile)) {
             try {
                 $sec = require $secretsFile;
+
                 if (is_array($sec)) {
-                    $__CRM_SECRETS[$module] = $sec;
+                    // Einheitlich: outer key == modulname
+                    if (isset($sec[$module]) && is_array($sec[$module])) {
+                        $__CRM_SECRET[$module] = $sec[$module];
+                    } else {
+                        // Fallback: akzeptiere "flache" Secrets, aber logge Warnung (für Migration)
+                        $__CRM_SECRET[$module] = $sec;
+                        $__CRM_BOOT_WARN[] = '[CRM] secrets not wrapped by module key (fallback used): ' . $secretsFile;
+                    }
                 } else {
                     $__CRM_BOOT_WARN[] = '[CRM] secrets invalid return (not array): ' . $secretsFile;
                 }
@@ -136,46 +150,146 @@ function CRM_LoadModuleSettingsAndSecrets(array $baseConfig): array
 $__CRM_CONFIG = CRM_LoadModuleSettingsAndSecrets($__CRM_CONFIG);
 
 /*
- * 0003 - CRM_SECRET
+ * 0003 - CRM_CFG
+ * Zugriff auf globale Config (settings_crm.php + gemergte modul settings_*).
+ */
+function CRM_CFG(string $key, mixed $default = null): mixed
+{
+    global $__CRM_CONFIG;
+
+    if (!is_array($__CRM_CONFIG)) { return $default; }
+    return array_key_exists($key, $__CRM_CONFIG) ? $__CRM_CONFIG[$key] : $default;
+}
+
+/*
+ * 0004 - CRM_SECRET
  * Zugriff auf modulare Secrets.
  *
  * Pfadnotation:
- * - "cti.sipgate_cti.token_id"
- *   ^mod ^key-in-secrets ^token-key
- *
- * Rückgabe:
- * - default, wenn nicht vorhanden
+ * - "<modul>.<key>" oder "<modul>.<nested>.<key>"
+ * Beispiel:
+ * - "teamviewer.api_token"
  */
 function CRM_SECRET(string $path, mixed $default = null): mixed
 {
-    global $__CRM_SECRETS;
+    global $__CRM_SECRET;
 
     $path = trim($path);
-    if ($path === '') return $default;
+    if ($path === '') { return $default; }
 
     $parts = explode('.', $path);
-    if (count($parts) < 2) return $default;
+    if (count($parts) < 2) { return $default; }
 
     $mod = trim((string)array_shift($parts));
-    if ($mod === '' || !isset($__CRM_SECRETS[$mod]) || !is_array($__CRM_SECRETS[$mod])) return $default;
+    if ($mod === '' || !isset($__CRM_SECRET[$mod]) || !is_array($__CRM_SECRET[$mod])) { return $default; }
 
-    $cur = $__CRM_SECRETS[$mod];
+    $cur = $__CRM_SECRET[$mod];
     foreach ($parts as $p) {
         $k = trim((string)$p);
-        if ($k === '' || !is_array($cur) || !array_key_exists($k, $cur)) return $default;
+        if ($k === '' || !is_array($cur) || !array_key_exists($k, $cur)) { return $default; }
         $cur = $cur[$k];
     }
 
     return $cur;
 }
 
-######## CONFIG HELPER ##################################################################################################################
-function CRM_CFG(string $key, mixed $default = null): mixed
+######## MODULE HELPER ##################################################################################################################
+
+/*
+ * 0101 - CRM_MOD_CFG
+ * Liefert Modul-Settings aus settings_<modul>.php.
+ *
+ * Beispiel:
+ *   CRM_MOD_CFG('teamviewer', 'api_base', 'https://...')
+ */
+function CRM_MOD_CFG(string $mod, string $key, mixed $default = null): mixed
 {
-    global $__CRM_CONFIG;
-    if (!is_array($__CRM_CONFIG)) return $default;
-    return array_key_exists($key, $__CRM_CONFIG) ? $__CRM_CONFIG[$key] : $default;
+    $mod = trim($mod);
+    $key = trim($key);
+
+    if ($mod === '' || $key === '') { return $default; }
+
+    $cfg = CRM_CFG($mod, null);
+    if (!is_array($cfg)) { return $default; }
+
+    return array_key_exists($key, $cfg) ? $cfg[$key] : $default;
 }
+
+/*
+ * 0102 - CRM_MOD_SECRET
+ * Liefert Modul-Secrets aus secrets_<modul>.php.
+ *
+ * Beispiel:
+ *   CRM_MOD_SECRET('teamviewer', 'api_token', '')
+ */
+function CRM_MOD_SECRET(string $mod, string $key, mixed $default = null): mixed
+{
+    $mod = trim($mod);
+    $key = trim($key);
+
+    if ($mod === '' || $key === '') { return $default; }
+
+    return CRM_SECRET($mod . '.' . $key, $default);
+}
+
+/*
+ * 0103 - CRM_MOD_PATH
+ * Liefert standardisierte Modulpfade (unterhalb paths.*):
+ * - data, log, tmp, config
+ *
+ * Beispiel:
+ *   CRM_MOD_PATH('teamviewer', 'data') . '/tv_poll_raw.json'
+ */
+function CRM_MOD_PATH(string $mod, string $type): string
+{
+    $mod  = trim($mod);
+    $type = trim($type);
+
+    $paths = (array)CRM_CFG('paths', []);
+    $base  = $paths[$type] ?? '';
+
+    if ($mod === '' || !is_string($base) || trim($base) === '') { return ''; }
+
+    return rtrim($base, '/') . '/' . $mod;
+}
+
+/*
+ * 0104 - CRM_LoginPath
+ * Liefert Login-bezogene Dateien anhand der Konvention settings_login.php:
+ *   return ['login'=>['files'=>['filename_mitarbeiter'=>..., 'filename_mitarbeiter_status'=>...]]];
+ *
+ * Pfadbasis kommt aus CRM_MOD_PATH('login','data')  => <paths.data>/login
+ * Kein Hardcode von /data/login im Endpoint.
+ */
+function CRM_LoginPath(string $key): string
+{
+    $key = trim($key);
+    if ($key === '') { return ''; }
+
+    // Modul aktiv?
+    $mods = (array)CRM_CFG('modules', []);
+    if (!(bool)($mods['login'] ?? false)) { return ''; }
+
+    // Basisverzeichnis für Login-Dateien: <paths.data>/login
+    $base = CRM_MOD_PATH('login', 'data');
+    if ($base === '') {
+        $base = CRM_BASE . '/data/login';
+    }
+
+
+    // Dateinamen aus settings_login.php
+    $files = (array)CRM_MOD_CFG('login', 'files', []);
+    $map = [
+        'mitarbeiter' => (string)($files['filename_mitarbeiter'] ?? ''),
+        'status'      => (string)($files['filename_mitarbeiter_status'] ?? ''),
+    ];
+
+    $fn = trim((string)($map[$key] ?? ''));
+    if ($fn === '') { return ''; }
+
+    return rtrim($base, '/') . '/' . $fn;
+}
+
 
 ######## CORE FLAGS #####################################################################################################################
 
@@ -183,6 +297,7 @@ define('CRM_DEBUG', (bool)CRM_CFG('debug', false));
 define('CRM_ENV', (string)CRM_CFG('env', 'prod'));
 
 ######## SETTINGS FILES #################################################################################################################
+
 function CFG_FILE(string $key, ?string $default = null): ?string
 {
     $files = (array)CRM_CFG('files', []);
@@ -219,7 +334,6 @@ if (CRM_DEBUG) {
     ini_set('display_errors', '0');
 }
 
-// Boot-Warnungen jetzt loggen (erst hier ist error_log sauber gesetzt)
 if (isset($__CRM_BOOT_WARN) && is_array($__CRM_BOOT_WARN) && !empty($__CRM_BOOT_WARN)) {
     foreach ($__CRM_BOOT_WARN as $w) { error_log($w); }
 }
@@ -240,7 +354,7 @@ register_shutdown_function(function (): void {
 $ttl = (int)CRM_CFG('session_ttl_sec', 0);
 if ($ttl > 0) {
     ini_set('session.gc_maxlifetime', (string)$ttl);
-    ini_set('session.cookie_lifetime', '0'); // Browser-Session-Cookie (Logout wird über Guard erzwungen)
+    ini_set('session.cookie_lifetime', '0');
 }
 
 ######## SESSION START ##################################################################################################################
@@ -273,11 +387,15 @@ function CRM_IsApiRequest(): bool
     $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
     if (strpos($uri, '/api/') !== false) { return true; }
 
-    $accept = (string)($_SERVER['HTTP_ACCEPT'] ?? '');
-    if (stripos($accept, 'application/json') !== false) { return true; }
+    $xhr = (string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '');
+    if (strtolower($xhr) === 'xmlhttprequest') { return true; }
+
+    $ct = (string)($_SERVER['CONTENT_TYPE'] ?? '');
+    if (stripos($ct, 'application/json') !== false) { return true; }
 
     return false;
 }
+
 
 function CRM_SessionDestroyAndExit(): void
 {
@@ -297,7 +415,7 @@ function CRM_SessionDestroyAndExit(): void
         exit;
     }
 
-    header('Location: /login/login.php');
+    header('Location: /login/');
     exit;
 }
 
@@ -344,16 +462,23 @@ function CRM_SessionGuard(): void
     $_SESSION['session_profile'] = $isOffice ? 'office' : 'remote';
 }
 
+error_log('[DBG] uri=' . ($_SERVER['REQUEST_URI'] ?? '') .
+    ' accept=' . ($_SERVER['HTTP_ACCEPT'] ?? '') .
+    ' script=' . ($_SERVER['SCRIPT_NAME'] ?? '') .
+    ' file=' . ($_SERVER['SCRIPT_FILENAME'] ?? '') .
+    ' docroot=' . ($_SERVER['DOCUMENT_ROOT'] ?? '') .
+    ' isApi=' . (CRM_IsApiRequest() ? '1' : '0')
+);
 CRM_SessionGuard();
 
 ######## JSON Datei einlesen ############################################################################################################
 
 function CRM_LoadJsonFile(string $file, array $default = []): array
 {
-    if (!is_file($file)) return $default;
+    if (!is_file($file)) { return $default; }
 
     $raw = (string)file_get_contents($file);
-    if (trim($raw) === '') return $default;
+    if (trim($raw) === '') { return $default; }
 
     $j = json_decode($raw, true);
     return is_array($j) ? $j : $default;

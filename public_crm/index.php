@@ -39,41 +39,8 @@ require_once CRM_ROOT . '/_inc/page_top.php';
 <section class="card card--wide">
   <div class="card__title">Status</div>
   <div class="card__body">
-    <pre style="white-space:pre-wrap;margin:0">
-<?php
-echo "CRM_ROOT:  " . (defined('CRM_ROOT') ? CRM_ROOT : 'n/a') . PHP_EOL;
-echo "CRM_BASE:  " . (defined('CRM_BASE') ? CRM_BASE : 'n/a') . PHP_EOL;
-echo "CRM_ENV:   " . (defined('CRM_ENV') ? CRM_ENV : 'n/a') . PHP_EOL;
-echo "CRM_DEBUG: " . (defined('CRM_DEBUG') ? (CRM_DEBUG ? 'true' : 'false') : 'n/a') . PHP_EOL;
-
-$mods = (function_exists('CRM_CFG') ? (array)CRM_CFG('modules', []) : []);
-echo PHP_EOL . "modules:" . PHP_EOL;
-foreach ($mods as $k => $v) {
-    echo "  - " . $k . " = " . ((bool)$v ? 'true' : 'false') . PHP_EOL;
-}
-
-echo PHP_EOL . "cti.sipgate:" . PHP_EOL;
-$cti = (function_exists('CRM_CFG') ? CRM_CFG('cti', null) : null);
-if (!is_array($cti)) {
-    echo "  cti = null" . PHP_EOL;
-} else {
-    $sip = (array)($cti['sipgate'] ?? []);
-    echo "  enabled: " . (((bool)($sip['enabled'] ?? false)) ? 'true' : 'false') . PHP_EOL;
-    echo "  secret_key: " . (string)($sip['secret_key'] ?? '') . PHP_EOL;
-    echo "  default_device: " . (string)($sip['default_device'] ?? '') . PHP_EOL;
-    echo "  allowed_devices: " . json_encode((array)($sip['allowed_devices'] ?? []), JSON_UNESCAPED_UNICODE) . PHP_EOL;
-}
-
-echo PHP_EOL . "expected settings path:" . PHP_EOL;
-foreach ($mods as $module => $enabled) {
-    if (!(bool)$enabled) continue;
-    $module = trim((string)$module);
-    if ($module === '') continue;
-    $file = (defined('CRM_BASE') ? (CRM_BASE . '/config/' . $module . '/settings_' . $module . '.php') : '');
-    echo "  - " . $module . ": " . $file . "  exists=" . (is_string($file) && $file !== '' && is_file($file) ? 'true' : 'false') . PHP_EOL;
-}
-?>
-    </pre>
+    
+  
   </div>
 </section>
 

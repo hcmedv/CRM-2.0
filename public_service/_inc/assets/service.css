@@ -1,1 +1,433 @@
-/* service.css */
+/* Datei: /public_crm/_inc/crm.css
+ * Referenzlayout (FIX) – final (mit deinen 2 Anpassungen)
+ */
+
+:root{
+  --gap: 16px;
+  --radius: 12px;
+  --border: 1px solid rgba(0,0,0,.12);
+  --shadow: 0 6px 18px rgba(0,0,0,.06);
+  --pad: 16px;
+  --maxw: 1200px;
+  --font: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+
+  --bg-page: #f6f7f9;   /* außen */
+  --bg-app:  #ffffff;  /* Rahmen */
+  --bg-main: #f6f7f9;  /* Contentfläche */
+}
+
+*{ box-sizing:border-box; }
+
+html{ scrollbar-gutter: stable; }
+
+body{
+  margin:0;
+  font-family: var(--font);
+  background: var(--bg-page);
+  color:#111;
+}
+
+a{ color:inherit; text-decoration:none; }
+
+/* ================= Header ================= */
+
+.app-header{
+  position: sticky;
+  top: 0;
+  z-index: 1500;
+}
+
+/* Full-width Balken */
+.bar{
+  width:100%;
+  background: var(--bg-app);
+}
+
+/* Inhaltsspur (senkrecht zum Content ausgerichtet) */
+.bar__inner{
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 0 var(--pad);
+}
+
+/* Topnav */
+.topnav{
+  border-bottom: var(--border);
+}
+.topnav__inner{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding: 10px 0;
+}
+.topnav__left{
+  display:flex;
+  gap:14px;
+  flex-wrap: wrap;
+  padding-left: 10px;
+}
+.topnav__item{
+  font-size:13px;
+  font-weight:700;
+  padding:4px 8px;
+  border-radius:6px;
+  border:1px solid transparent;
+}
+.topnav__item:hover{ background: rgba(0,0,0,.04); }
+.topnav__item--active{
+  background: rgba(162,190,229,.35);
+  border-color: rgba(0,123,255,.22);
+}
+
+.topnav__right{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  white-space:nowrap;
+  padding-right: 10px;
+}
+
+/* ================= User Menu (Flyout) ================= */
+
+.userbox{
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.userbtn{
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,.16);
+  background: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  line-height: 1;
+}
+.userbtn:hover{ background: rgba(0,0,0,.04); }
+
+.userbtn svg{
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.userfly{
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  min-width: 220px;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,.14);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.10);
+  overflow: hidden;
+  display: none;
+  z-index: 2000;
+}
+
+.userbox.is-open .userfly{ display: block; }
+
+.userfly__head{
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  border-bottom: 1px solid rgba(0,0,0,.12);
+  background: rgba(0,0,0,.02);
+}
+
+.userfly__body{
+  padding: 10px 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.userfly__muted{
+  font-size: 11px;
+  opacity: .7;
+}
+
+.userfly__logout{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,.16);
+  background: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+}
+.userfly__logout:hover{ background: rgba(0,0,0,.04); }
+
+
+.topnav__user{ font-size:11px; opacity:.7; }
+.topnav__logout{
+  font-size:11px;
+  padding:3px 7px;
+  border-radius:8px;
+  border:1px solid rgba(0,0,0,.16);
+  background:#fff;
+}
+.topnav__logout:hover{ background: rgba(0,0,0,.04); }
+
+/* Subnav */
+.subnav{
+  background: var(--bg-main);
+  border-bottom: var(--border);
+}
+.subnav__inner{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  padding:8px 0;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+.subnav__chip{
+  font-size:11px;
+  padding:4px 8px;
+  border-radius:10px;
+  border:1px solid transparent;
+}
+.subnav__chip:hover{ background: rgba(0,0,0,.04); }
+.subnav__chip--active{
+  background: rgba(162,190,229,.35);
+  border-color: rgba(0,123,255,.22);
+}
+
+/* ================= App ================= */
+
+.app{
+  max-width: var(--maxw);
+  margin: 12px auto;
+  background: var(--bg-app);
+  border: var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: visible;
+}
+
+.page-block{
+  padding: var(--pad);
+  background: transparent;
+}
+
+/* Footer */
+.app-footer{
+  border-top: var(--border);
+  padding: 8px var(--pad);
+  font-size:11px;
+  opacity:.7;
+}
+
+/* ================= Grid & Cards ================= */
+
+.grid{
+  display:grid;
+  gap: var(--gap);
+}
+.grid--start{
+  grid-template-columns: repeat(3, 1fr);
+}
+@media (max-width: 980px){
+  .grid--start{ grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 620px){
+  .grid--start{ grid-template-columns: 1fr; }
+  .topnav__inner{ align-items:flex-start; }
+}
+
+.card{
+  background:#fff;
+  border: var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow:hidden;
+}
+.card--wide{ grid-column: 1 / -1; }
+.card__title{
+  padding:10px 12px;
+  font-weight:700;
+  border-bottom: var(--border);
+  background: rgba(0,0,0,.02);
+}
+.card__body{
+  padding:12px;
+  min-height:90px;
+}
+
+/* ================= Forms (Login etc.) ================= */
+
+.form{
+  display:grid;
+  gap:10px;
+  max-width:360px;
+}
+
+.input{
+  width:100%;
+  padding:10px 12px;
+  border: var(--border);
+  border-radius: 10px;
+  background:#fff;
+  font: inherit;
+  font-size: 14px;
+}
+
+.input:focus{
+  outline: none;
+  border-color: rgba(0,123,255,.35);
+  box-shadow: 0 0 0 3px rgba(0,123,255,.12);
+}
+
+.btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  padding:10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,.16);
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn:hover{
+  background: rgba(0,0,0,.04);
+}
+
+.form-error{
+  margin-bottom:10px;
+  color:#b00020;
+  font-weight:700;
+}
+
+.app-footer{
+  border-top:1px solid rgba(0,0,0,.12);
+  background:#fff;
+}
+
+.app-footer__inner{
+  max-width:1100px;
+  margin:0 auto;
+  padding:14px 16px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+
+.app-footer__links{
+  display:flex;
+  gap:10px;
+}
+
+/* -------------------------------------------------
+   Online Status Dot – eindeutige Zuordnung
+   online = grün, busy = gelb, away/off = rot
+   ------------------------------------------------- */
+.status__dot{
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #e74c3c;          /* default rot */
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.10);
+}
+
+.status__dot[data-state="online"]{ background:#2ecc71; }  /* grün */
+.status__dot[data-state="busy"]  { background:#f1c40f; }  /* gelb */
+.status__dot[data-state="away"]  { background:#e74c3c; }  /* rot */
+.status__dot[data-state="off"]   { background:#080302; }  /* rot */
+/* -----------------------------
+   Service: Status-Chips + aktiv
+   ----------------------------- */
+.chip{
+  border-radius:999px;
+  padding:6px 10px;
+  border:1px solid rgba(0,0,0,.18);
+  background:#fff;
+  font-size:12px;
+  line-height:1;
+}
+
+.chip.is-active{
+  box-shadow: 0 0 0 2px rgba(0,0,0,.18) inset;
+  font-weight:600;
+}
+
+/* ============================
+   Service Status – 2-zeilig
+   ============================ */
+
+.status{
+  display:flex;
+  align-items:flex-start;   /* Textblock startet oben am Dot */
+  gap:14px;
+  padding-top:6px;
+  padding-bottom:6px;
+}
+
+/* rechter Textblock */
+.status > div{
+  display:flex;
+  flex-direction:column;
+}
+
+/* Titel: eigene Zeile */
+.status__title{
+  display:block;
+  font-weight:600;
+  line-height:1.25;
+}
+
+/* Erklärungstext: bewusst darunter + Abstand */
+#svcStateText{
+  display:block;
+  margin-top:6px;           /* Abstand Titel -> Text */
+  line-height:1.35;
+}
+
+/* Dot sauber ausrichten */
+.status__dot{
+  margin-top:3px;           /* optische Feinjustierung */
+}
+
+/* ============================
+   Service Status – Abstand zu Chips
+   ============================ */
+
+/* Abstand zwischen Statusblock (Dot+Text) und Buttons */
+.status{
+  margin-bottom:14px;   /* vorher praktisch 0 */
+}
+
+/* zusätzlicher Abstand oberhalb der Chip-Reihe */
+.status + .row{
+  margin-top:10px;
+}
+
+/* ============================
+   Service Status – Buttons zentrieren
+   ============================ */
+
+/* Button-Reihe mittig */
+.card .row{
+  justify-content:center;
+}
+
+/* Nur Status-Chips zentrieren */
+.card .status + .row{
+  justify-content:center;
+}

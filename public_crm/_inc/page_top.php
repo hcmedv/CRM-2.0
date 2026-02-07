@@ -72,10 +72,23 @@ $ctiEnabled = (bool)($mods['cti'] ?? false);
 
       <div class="topnav__right">
 
-        <?php if ($ctiEnabled): ?>
+      <?php if ($ctiEnabled): ?>
         <!-- CTI Integration -->
         <div class="cti2-nav" id="cti2">
-          <input class="cti2-input" id="cti2-q" placeholder="Kunde / Telefon suchen …" />
+          <input
+            class="cti2-input"
+            id="cti2-q"
+            placeholder="Kunde / Telefon suchen …"
+            autocomplete="off"
+          />
+
+          <!-- Session Countdown (inline im Input) -->
+          <span
+            class="cti2-input__suffix"
+            id="crmSessionCountdown"
+            aria-hidden="true"
+          ></span>
+
           <div class="cti2-dd" id="cti2-dd">
             <div class="cti2-list" id="cti2-list"></div>
 
@@ -86,11 +99,19 @@ $ctiEnabled = (bool)($mods['cti'] ?? false);
           </div>
         </div>
         <!-- End CTI Integration -->
-        <?php endif; ?>
+      <?php endif; ?>
+
+
+
 
         <!-- User Integration -->
         <div class="userbox" id="crmUserBox">
-          <button class="userbtn" type="button" aria-label="Benutzermenü" aria-haspopup="menu" aria-expanded="false">
+
+        <span class="sesshint" id="crmSessHint"></span>
+
+          <button class="userbtn userbtn--state-off" id="crmUserBtn" type="button"
+                  aria-label="Benutzermenü" aria-haspopup="menu" aria-expanded="false">
+            <span class="userbtn__dot" aria-hidden="true"></span>
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path fill="currentColor" d="M12 12a4 4 0 1 0-4-4a4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/>
             </svg>
@@ -98,14 +119,32 @@ $ctiEnabled = (bool)($mods['cti'] ?? false);
 
           <div class="userfly" role="menu" aria-label="Benutzermenü">
             <div class="userfly__head">Angemeldet</div>
+
             <div class="userfly__body">
               <?php if ($userName !== ''): ?>
                 <div class="userfly__muted"><?= htmlspecialchars($userName, ENT_QUOTES) ?></div>
               <?php endif; ?>
+
+              <div class="userstatus" data-userstatus>
+                <div class="userfly__muted" style="margin-bottom:6px;">Status</div>
+
+                <div class="userstatus__row">
+                  <button class="chip chip--work" type="button" data-userstatus-set="online">Verfügbar</button>
+                  <button class="chip chip--wait" type="button" data-userstatus-set="busy">Beschäftigt</button>
+                  <button class="chip chip--closed" type="button" data-userstatus-set="away">Abwesend</button>
+                </div>
+
+                <div class="userfly__muted" id="crmUserStatusMsg" style="margin-top:6px;"></div>
+              </div>
+
               <a class="userfly__logout" href="/login/logout.php" role="menuitem">Abmelden</a>
             </div>
           </div>
         </div>
+        <script defer src="/_inc/assets/crm_user_status.js?v=1"></script>
+        <link rel="stylesheet" href="/_inc/assets/crm_user_status.css?v=1">
+        <!-- End User Integration -->
+
 
       </div>
     </div>

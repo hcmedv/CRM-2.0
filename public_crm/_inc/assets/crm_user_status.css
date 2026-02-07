@@ -1,0 +1,86 @@
+/* Datei: /public_crm/_inc/assets/crm_user_status.css
+   Zweck:
+   - User-Flyout Breite fix
+   - Status-Chips: 1 Zeile, kompakt, aktiv markiert
+   - User-Button Status-Dot: immer sichtbar (overflow + z-index)
+*/
+
+/* -------------------------------------------------
+   Flyout – feste Breite
+   ------------------------------------------------- */
+.userfly{
+  min-width:300px;
+  width:300px;
+}
+
+/* -------------------------------------------------
+   User Button – Status Dot sicher sichtbar
+   ------------------------------------------------- */
+.userbtn{
+  position:relative;
+  overflow:visible; /* WICHTIG: Dot darf rausstehen */
+}
+
+.userbtn__dot{
+  position:absolute;
+  right:-2px;
+  top:-2px;
+  z-index:5;
+  width:10px;
+  height:10px;
+  border-radius:999px;
+  border:2px solid #fff;
+  background:#e74c3c; /* default rot */
+}
+
+/* Dot-Farben über Klassen */
+.userbtn--state-online .userbtn__dot{ background:#2ecc71; } /* grün */
+.userbtn--state-busy   .userbtn__dot{ background:#f1c40f; } /* gelb */
+.userbtn--state-away   .userbtn__dot{ background:#e74c3c; } /* rot */
+.userbtn--state-off    .userbtn__dot{ background:#e74c3c; } /* rot */
+
+/* -------------------------------------------------
+   User Status Chips – eine Reihe + kompakt
+   ------------------------------------------------- */
+.userstatus{
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+}
+
+.userstatus__row{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  flex-wrap:nowrap; /* eine Zeile */
+}
+
+.userstatus__row .chip{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:6px 10px;
+  font-size:12px;
+  line-height:1;
+  border-radius:999px;
+  white-space:nowrap;
+}
+
+/* Optional: ruhigere Chip-Farben im Flyout */
+.userstatus__row .chip.chip--work{
+  background:rgba(46, 204, 113, .12);
+  border:1px solid rgba(46, 204, 113, .55);
+}
+.userstatus__row .chip.chip--wait{
+  background:rgba(241, 196, 15, .14);
+  border:1px solid rgba(241, 196, 15, .60);
+}
+.userstatus__row .chip.chip--closed{
+  background:rgba(231, 76, 60, .10);
+  border:1px solid rgba(231, 76, 60, .55);
+}
+
+/* Active Markierung */
+.userstatus__row .chip.is-active{
+  box-shadow:0 0 0 2px rgba(0,0,0,.18) inset;
+  font-weight:600;
+}
