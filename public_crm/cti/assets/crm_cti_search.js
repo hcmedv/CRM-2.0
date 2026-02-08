@@ -122,7 +122,7 @@
     t = setTimeout(async () => {
       try {
         const r = await fetch(
-          `/api/crm/api_crm_search_customers.php?q=${encodeURIComponent(v)}&mode=cti`,
+          `/api/crm/api_crm_search_customers.php?q=${encodeURIComponent(v)}&type=all`,
           { credentials: 'same-origin' }
         );
 

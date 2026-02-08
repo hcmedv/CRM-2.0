@@ -32,7 +32,7 @@
   box-shadow:0 10px 26px rgba(0,0,0,0.12);
 
   display:none;
-  z-index:3000;
+  z-index:15000;
   overflow:hidden;
 }
 .cti2-dd.is-open{ display:block; }
@@ -144,3 +144,34 @@
 .cti2-status--busy{ color:#0b5ed7; }
 .cti2-status--ok{ color:#198754; }
 .cti2-status--error{ color:#dc3545; }
+
+
+/* ======================================================================
+   CTI – Countdown im Suchfeld (Suffix im Input)
+   ====================================================================== */
+
+.cti2-nav{
+  position:relative; /* ist bei dir schon da, aber hier zur Sicherheit */
+}
+
+/* Platz rechts schaffen, damit Text nicht unter den Countdown läuft */
+.cti2-input{
+  padding-right: 96px; /* je nach Countdown-Länge 80–110px */
+}
+
+/* Countdown im Input (rechts) */
+.cti2-input__suffix{
+  position:absolute;
+  right:12px;
+  top:50%;
+  transform:translateY(-50%);
+  font-size:12px;
+  color:#777;
+  pointer-events:none;
+  white-space:nowrap;
+  opacity:.85;
+  max-width: 90px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+

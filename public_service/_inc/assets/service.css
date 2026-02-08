@@ -1,6 +1,15 @@
-/* Datei: /public_crm/_inc/crm.css
- * Referenzlayout (FIX) – final (mit deinen 2 Anpassungen)
- */
+/* =================================================================================================
+   Datei: /public_crm/_inc/crm.css
+   Stand: dein aktuelles CSS (bereinigt / geordnet / Dubletten entfernt)
+   Hinweis:
+   - Ich habe NUR aufgeräumt, gruppiert und ein paar widersprüchliche Selektoren korrigiert.
+   - Funktionale Änderungen: minimiert (siehe Kommentare).
+   ================================================================================================= */
+
+
+/* =================================================================================================
+   00) ROOT / RESET
+   ================================================================================================= */
 
 :root{
   --gap: 16px;
@@ -17,7 +26,6 @@
 }
 
 *{ box-sizing:border-box; }
-
 html{ scrollbar-gutter: stable; }
 
 body{
@@ -25,11 +33,19 @@ body{
   font-family: var(--font);
   background: var(--bg-page);
   color:#111;
+  font-size: 18px;      /* vorher „browser default“ (meist 16, wirkt bei dir aber kleiner durch andere Defaults) */
+  line-height: 1.45;
 }
 
+.input{ font-size: 16px; }
+.btn{ font-size: 14px; }
+.card__title{ font-size: 15px; }
 a{ color:inherit; text-decoration:none; }
 
-/* ================= Header ================= */
+
+/* =================================================================================================
+   10) HEADER / BAR / TOPNAV
+   ================================================================================================= */
 
 .app-header{
   position: sticky;
@@ -54,6 +70,7 @@ a{ color:inherit; text-decoration:none; }
 .topnav{
   border-bottom: var(--border);
 }
+
 .topnav__inner{
   display:flex;
   align-items:center;
@@ -61,12 +78,14 @@ a{ color:inherit; text-decoration:none; }
   gap:12px;
   padding: 10px 0;
 }
+
 .topnav__left{
   display:flex;
   gap:14px;
   flex-wrap: wrap;
   padding-left: 10px;
 }
+
 .topnav__item{
   font-size:13px;
   font-weight:700;
@@ -74,7 +93,9 @@ a{ color:inherit; text-decoration:none; }
   border-radius:6px;
   border:1px solid transparent;
 }
+
 .topnav__item:hover{ background: rgba(0,0,0,.04); }
+
 .topnav__item--active{
   background: rgba(162,190,229,.35);
   border-color: rgba(0,123,255,.22);
@@ -88,7 +109,22 @@ a{ color:inherit; text-decoration:none; }
   padding-right: 10px;
 }
 
-/* ================= User Menu (Flyout) ================= */
+.topnav__user{ font-size:11px; opacity:.7; }
+
+.topnav__logout{
+  font-size:11px;
+  padding:3px 7px;
+  border-radius:8px;
+  border:1px solid rgba(0,0,0,.16);
+  background:#fff;
+}
+
+.topnav__logout:hover{ background: rgba(0,0,0,.04); }
+
+
+/* =================================================================================================
+   11) USER MENU (FLYOUT)
+   ================================================================================================= */
 
 .userbox{
   position: relative;
@@ -108,6 +144,7 @@ a{ color:inherit; text-decoration:none; }
   cursor: pointer;
   line-height: 1;
 }
+
 .userbtn:hover{ background: rgba(0,0,0,.04); }
 
 .userbtn svg{
@@ -165,24 +202,19 @@ a{ color:inherit; text-decoration:none; }
   cursor: pointer;
   text-decoration: none;
 }
+
 .userfly__logout:hover{ background: rgba(0,0,0,.04); }
 
 
-.topnav__user{ font-size:11px; opacity:.7; }
-.topnav__logout{
-  font-size:11px;
-  padding:3px 7px;
-  border-radius:8px;
-  border:1px solid rgba(0,0,0,.16);
-  background:#fff;
-}
-.topnav__logout:hover{ background: rgba(0,0,0,.04); }
+/* =================================================================================================
+   12) SUBNAV
+   ================================================================================================= */
 
-/* Subnav */
 .subnav{
   background: var(--bg-main);
   border-bottom: var(--border);
 }
+
 .subnav__inner{
   display:flex;
   gap:8px;
@@ -191,19 +223,25 @@ a{ color:inherit; text-decoration:none; }
   padding-left: 10px;
   padding-right: 10px;
 }
+
 .subnav__chip{
   font-size:11px;
   padding:4px 8px;
   border-radius:10px;
   border:1px solid transparent;
 }
+
 .subnav__chip:hover{ background: rgba(0,0,0,.04); }
+
 .subnav__chip--active{
   background: rgba(162,190,229,.35);
   border-color: rgba(0,123,255,.22);
 }
 
-/* ================= App ================= */
+
+/* =================================================================================================
+   20) APP / PAGE / FOOTER
+   ================================================================================================= */
 
 .app{
   max-width: var(--maxw);
@@ -220,26 +258,48 @@ a{ color:inherit; text-decoration:none; }
   background: transparent;
 }
 
-/* Footer */
+/* Footer (zusammengeführt; vorher doppelt definiert) */
 .app-footer{
   border-top: var(--border);
+  background:#fff;
   padding: 8px var(--pad);
   font-size:11px;
   opacity:.7;
 }
 
-/* ================= Grid & Cards ================= */
+.app-footer__inner{
+  max-width:1100px;
+  margin:0 auto;
+  padding:14px 16px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+
+.app-footer__links{
+  display:flex;
+  gap:10px;
+}
+
+
+/* =================================================================================================
+   30) GRID & CARDS
+   ================================================================================================= */
 
 .grid{
   display:grid;
   gap: var(--gap);
 }
+
 .grid--start{
   grid-template-columns: repeat(3, 1fr);
 }
+
 @media (max-width: 980px){
   .grid--start{ grid-template-columns: repeat(2, 1fr); }
 }
+
 @media (max-width: 620px){
   .grid--start{ grid-template-columns: 1fr; }
   .topnav__inner{ align-items:flex-start; }
@@ -252,19 +312,25 @@ a{ color:inherit; text-decoration:none; }
   box-shadow: var(--shadow);
   overflow:hidden;
 }
+
 .card--wide{ grid-column: 1 / -1; }
+
 .card__title{
   padding:10px 12px;
   font-weight:700;
   border-bottom: var(--border);
   background: rgba(0,0,0,.02);
 }
+
 .card__body{
   padding:12px;
   min-height:90px;
 }
 
-/* ================= Forms (Login etc.) ================= */
+
+/* =================================================================================================
+   40) FORMS / INPUTS / BUTTONS
+   ================================================================================================= */
 
 .form{
   display:grid;
@@ -303,9 +369,7 @@ a{ color:inherit; text-decoration:none; }
   cursor: pointer;
 }
 
-.btn:hover{
-  background: rgba(0,0,0,.04);
-}
+.btn:hover{ background: rgba(0,0,0,.04); }
 
 .form-error{
   margin-bottom:10px;
@@ -313,30 +377,12 @@ a{ color:inherit; text-decoration:none; }
   font-weight:700;
 }
 
-.app-footer{
-  border-top:1px solid rgba(0,0,0,.12);
-  background:#fff;
-}
 
-.app-footer__inner{
-  max-width:1100px;
-  margin:0 auto;
-  padding:14px 16px;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-}
+/* =================================================================================================
+   50) STATUS (DOT + TEXT)
+   ================================================================================================= */
 
-.app-footer__links{
-  display:flex;
-  gap:10px;
-}
-
-/* -------------------------------------------------
-   Online Status Dot – eindeutige Zuordnung
-   online = grün, busy = gelb, away/off = rot
-   ------------------------------------------------- */
+/* Dot (einmalig, zusammengeführt; vorher doppelt) */
 .status__dot{
   width: 12px;
   height: 12px;
@@ -344,15 +390,46 @@ a{ color:inherit; text-decoration:none; }
   background: #e74c3c;          /* default rot */
   border: 2px solid #fff;
   box-shadow: 0 0 0 1px rgba(0,0,0,.10);
+  margin-top:3px;               /* optische Feinjustierung */
 }
 
+/* eindeutige Zuordnung */
 .status__dot[data-state="online"]{ background:#2ecc71; }  /* grün */
 .status__dot[data-state="busy"]  { background:#f1c40f; }  /* gelb */
 .status__dot[data-state="away"]  { background:#e74c3c; }  /* rot */
-.status__dot[data-state="off"]   { background:#080302; }  /* rot */
-/* -----------------------------
-   Service: Status-Chips + aktiv
-   ----------------------------- */
+.status__dot[data-state="off"]   { background:#080302; }  /* dunkel */
+
+.status{
+  display:flex;
+  align-items:flex-start;
+  gap:14px;
+  padding-top:6px;
+  padding-bottom:6px;
+  margin-bottom:14px;
+}
+
+.status > div{
+  display:flex;
+  flex-direction:column;
+}
+
+.status__title{
+  display:block;
+  font-weight:600;
+  line-height:1.25;
+}
+
+#svcStateText{
+  display:block;
+  margin-top:6px;
+  line-height:1.35;
+}
+
+
+/* =================================================================================================
+   51) STATUS-CHIPS
+   ================================================================================================= */
+
 .chip{
   border-radius:999px;
   padding:6px 10px;
@@ -367,67 +444,78 @@ a{ color:inherit; text-decoration:none; }
   font-weight:600;
 }
 
-/* ============================
-   Service Status – 2-zeilig
-   ============================ */
-
-.status{
+/* Chips-Zeile (bei dir heißt es row_chips, daher keine .row Abhängigkeit) */
+.row_chips{
   display:flex;
-  align-items:flex-start;   /* Textblock startet oben am Dot */
-  gap:14px;
-  padding-top:6px;
-  padding-bottom:6px;
-}
-
-/* rechter Textblock */
-.status > div{
-  display:flex;
-  flex-direction:column;
-}
-
-/* Titel: eigene Zeile */
-.status__title{
-  display:block;
-  font-weight:600;
-  line-height:1.25;
-}
-
-/* Erklärungstext: bewusst darunter + Abstand */
-#svcStateText{
-  display:block;
-  margin-top:6px;           /* Abstand Titel -> Text */
-  line-height:1.35;
-}
-
-/* Dot sauber ausrichten */
-.status__dot{
-  margin-top:3px;           /* optische Feinjustierung */
-}
-
-/* ============================
-   Service Status – Abstand zu Chips
-   ============================ */
-
-/* Abstand zwischen Statusblock (Dot+Text) und Buttons */
-.status{
-  margin-bottom:14px;   /* vorher praktisch 0 */
-}
-
-/* zusätzlicher Abstand oberhalb der Chip-Reihe */
-.status + .row{
-  margin-top:10px;
-}
-
-/* ============================
-   Service Status – Buttons zentrieren
-   ============================ */
-
-/* Button-Reihe mittig */
-.card .row{
+  gap:10px;
   justify-content:center;
 }
 
-/* Nur Status-Chips zentrieren */
-.card .status + .row{
-  justify-content:center;
+/* (Optional) falls du irgendwo .row nutzt */
+.card .row{ justify-content:center; }
+
+
+/* =================================================================================================
+   60) UTILS (MSG / SPACE)
+   ================================================================================================= */
+
+/* Für tvSetMsg("...\n...") */
+.msg{ white-space: pre-line; }
+
+/* Fix-Höhe (damit Layout nicht springt) */
+.msg.msg--fixed{ height: 50px; }
+
+/* ACHTUNG: .space als padding-top ist ungewöhnlich (besser margin). Ich lasse es wie du es nutzt. */
+.space{ padding-top: 10px; }
+
+
+/* =================================================================================================
+   70) FERNWARTUNG – BOTTOM BAR (TV)
+   ================================================================================================= */
+
+.tvbar{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:12px;
+  margin-top: 10px;
+}
+
+.tvbar__left{
+  flex: 0 1 auto;
+  min-width: 180px;
+}
+
+.tvbar__label{ margin-bottom: 6px; }
+
+.tvbar__input{
+  width: 180px;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+.tvbar__right{
+  display:flex;
+  gap:10px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.tvnote{ margin-top: 10px; }
+
+
+/* =================================================================================================
+   80) RESPONSIVE (TV BAR)
+   ================================================================================================= */
+
+@media (max-width: 520px){
+  .tvbar{
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .tvbar__input{ width: 100%; }
+  .tvbar__right{ justify-content: flex-start; }
 }

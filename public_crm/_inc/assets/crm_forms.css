@@ -1,0 +1,166 @@
+
+/* ==========================================================================
+   CRM – Forms & Inputs (Global)
+   Datei: crm_forms.css
+   Zweck:
+   - Zentrale Styles für Formulare, Inputs, Buttons, Autocomplete/Flyouts
+   - Einheitliches Verhalten über alle Module (CTI, Camera, Events, LN)
+   - Keine Layout-/Card-Styles (die liegen in crm.css)
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Z-INDEX KONVENTION
+   --------------------------------------------------------------------------
+   10000  CTI (Nav / global immer oben)
+   6000   Global Flyouts / Autocomplete / Suggest
+   4000   Modale Overlays (Form-Dialoge, Lightbox)
+   1000   Normaler Content
+-------------------------------------------------------------------------- */
+
+:root{
+  --z-cti:        10000;
+  --z-flyout:      6000;
+  --z-overlay:     4000;
+}
+
+/* ==========================================================================
+   INPUTS / LABELS
+   ========================================================================== */
+
+.input,
+.evt-input{
+  width:100%;
+  box-sizing:border-box;
+  border:1px solid #d6d6d6;
+  border-radius:10px;
+  padding:8px 10px;
+  font-size:13px;
+  line-height:1.2;
+  outline:none;
+  background:#fff;
+}
+
+.input:focus,
+.evt-input:focus{
+  border-color:#9bbcff;
+}
+
+.evt-label{
+  display:block;
+  font-size:12px;
+  font-weight:600;
+  margin-bottom:4px;
+}
+
+.events-muted{
+  font-size:12px;
+  color:#666;
+}
+
+/* ==========================================================================
+   BUTTONS (ergänzend zu crm.css)
+   ========================================================================== */
+
+.btn{
+  border-radius:10px;
+}
+
+.btn--xs{
+  font-size:11px;
+  padding:4px 8px;
+}
+
+/* ==========================================================================
+   AUTOCOMPLETE / SUGGEST (global, Camera / Events / CTI-light)
+   ========================================================================== */
+
+.autocomplete{
+  position:relative;
+}
+
+.suggest{
+  position:absolute;
+  left:0;
+  right:0;
+  top:calc(100% + 6px);
+
+  z-index:var(--z-flyout);
+
+  background:#fff;
+  border:1px solid #e6e6e6;
+  border-radius:12px;
+  box-shadow:0 10px 30px rgba(0,0,0,0.12);
+  overflow:hidden;
+}
+
+.suggest__item{
+  padding:10px 12px;
+  cursor:pointer;
+  border-top:1px solid #f1f1f1;
+}
+
+.suggest__item:first-child{
+  border-top:none;
+}
+
+.suggest__item:hover,
+.suggest__item.is-active{
+  background:#f4f7ff;
+}
+
+/* Strukturierte Suggest-Zeile */
+.suggest__row{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+}
+
+.suggest__main{
+  flex:1 1 auto;
+  min-width:0;
+}
+
+.suggest__title{
+  font-weight:700;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.suggest__badge{
+  flex:0 0 auto;
+  font-size:11px;
+  padding:2px 6px;
+  border-radius:6px;
+  opacity:.85;
+}
+
+.suggest__badge--customer{
+  background:#e6f0ff;
+  color:#2458d3;
+}
+
+.suggest__badge--m365{
+  background:#eaf7ef;
+  color:#2e7d32;
+}
+
+/* ==========================================================================
+   CTI (Form-relevant Teile, Nav-Layout bleibt in crm_cti.css)
+   ========================================================================== */
+
+.cti2-dd{
+  z-index:var(--z-cti);
+}
+
+/* ==========================================================================
+   LIGHTBOX / OVERLAY (Form-nahe Overlays)
+   ========================================================================== */
+
+.form-overlay{
+  position:fixed;
+  inset:0;
+  z-index:var(--z-overlay);
+}
+
+

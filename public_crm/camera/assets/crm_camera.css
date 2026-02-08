@@ -1,0 +1,251 @@
+/* =================================================================================================
+   CRM 2.0 – CAMERA MODULE
+   Datei: crm_camera.css
+
+   Zweck:
+   - Styles ausschließlich für das Kamera-Modul
+   - Layout der drei Bereiche (Kunde / Bilder / Aktion)
+   - Queue, Thumbnails, Lightbox
+   - Autocomplete-Flyout für Kunden (nur positioning/z-index; Look kommt aus globalen Styles)
+   - KEINE Formular-Basisklassen (siehe crm_forms.css)
+   - KEINE Button-Themes (siehe crm.css)
+
+   Docs:
+   - _docs/112_structure_css.md
+================================================================================================= */
+
+
+/* =================================================================================================
+   1) SECTION WRAPPER
+================================================================================================= */
+
+.cam_card{
+  margin-bottom:16px;
+}
+
+/* WICHTIG: Suggest/Flyouts dürfen nicht abgeschnitten werden */
+.cam_card .card__body{
+  overflow:visible;
+}
+
+
+/* =================================================================================================
+   2) CUSTOMER LAYOUT (Chip + Input)
+================================================================================================= */
+
+.cam_row{
+  display:flex;
+  gap:14px;
+  align-items:flex-end;
+  flex-wrap:wrap;
+}
+
+.cam_col{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
+.cam_col--grow{
+  flex:1 1 100%;
+  min-width:320px;
+}
+
+.cam_customerline{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+/* Chip vor Input (Breite stabil, Input füllt Rest) */
+#cam_customer_chip{
+  flex:0 0 auto;
+}
+
+#cam_customer_q{
+  flex:1 1 auto;
+  min-width:220px;
+}
+
+/* =================================================================================================
+   2x) CUSTOMER AUTOCOMPLETE – Flyout über Cards sichtbar machen
+================================================================================================= */
+
+/* Wichtig: Card/Body dürfen das Flyout nicht abschneiden */
+.cam_card,
+.cam_card .card__body{
+  overflow: visible;
+}
+
+/* Autocomplete-Wrapper als Stacking Context */
+.cam_card .autocomplete{
+  position: relative;
+  z-index: 1200; /* über Cards/Flyouts, unter CTI (10000) */
+}
+
+/* Suggest-Flyout */
+.cam_card .suggest{
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+
+  z-index: 6000;
+}
+
+
+
+/* =================================================================================================
+   3) AUTOCOMPLETE (nur Layering/Positioning)
+================================================================================================= */
+
+/* Parent für absolute Suggest-Liste */
+.autocomplete{
+  position:relative;
+}
+
+/* Flyout MUSS über Cards/Sections liegen */
+.suggest{
+  position:absolute;
+  left:0;
+  right:0;
+  top:calc(100% + 6px);
+  z-index:6000;                  /* CTI: 10000, Lightbox: 5200, Flyouts: 5000+ → hier bewusst drüber */
+}
+
+
+/* =================================================================================================
+   4) CAMERA LIVE VIEW
+================================================================================================= */
+
+#cam_video{
+  width:100%;
+  max-height:420px;
+  border-radius:12px;
+  background:#000;
+  object-fit:contain;
+}
+
+.cam_actions{
+  display:flex;
+  gap:10px;
+  margin-top:12px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+
+.cam_actions--top{
+  margin-bottom:12px;
+}
+
+.cam_res{
+  min-width:200px;
+}
+
+
+/* =================================================================================================
+   5) QUEUE / THUMBNAILS
+================================================================================================= */
+
+.cam_queue{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:14px;
+}
+
+.cam_thumb{
+  position:relative;
+  width:160px;
+  height:120px;
+  border-radius:10px;
+  overflow:hidden;
+  background:#111;
+  cursor:pointer;
+}
+
+.cam_thumb img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+
+.cam_thumb__remove{
+  position:absolute;
+  top:6px;
+  right:6px;
+  width:26px;
+  height:26px;
+  border-radius:50%;
+  border:none;
+  background:rgba(0,0,0,.6);
+  color:#fff;
+  font-size:14px;
+  cursor:pointer;
+}
+
+
+/* =================================================================================================
+   6) LIGHTBOX (IMAGE PREVIEW)
+================================================================================================= */
+
+.cam_lightbox{
+  position:fixed;
+  inset:0;
+  z-index:5200; /* unter CTI (10000), über Standard-Flyouts (5000) */
+}
+
+.cam_lightbox__backdrop{
+  position:absolute;
+  inset:0;
+  background:rgba(0,0,0,.55);
+}
+
+.cam_lightbox__panel{
+  position:relative;
+  margin:6vh auto;
+  max-width:90vw;
+  max-height:88vh;
+  background:#fff;
+  border-radius:14px;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+
+.cam_lightbox__head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:10px 14px;
+  border-bottom:1px solid #e5e7eb;
+}
+
+.cam_lightbox__title{
+  font-size:14px;
+  font-weight:600;
+}
+
+.cam_lightbox__body{
+  padding:10px;
+  overflow:auto;
+}
+
+.cam_lightbox__body img{
+  max-width:100%;
+  height:auto;
+  border-radius:10px;
+}
+
+
+/* =================================================================================================
+   7) STATUS / HELPERS
+================================================================================================= */
+
+#cam_status{
+  margin-top:6px;
+}
+
+.cam_spacer{
+  flex:1 1 auto;
+}
