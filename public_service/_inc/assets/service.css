@@ -33,7 +33,7 @@ body{
   font-family: var(--font);
   background: var(--bg-page);
   color:#111;
-  font-size: 18px;      /* vorher „browser default“ (meist 16, wirkt bei dir aber kleiner durch andere Defaults) */
+  font-size: 14px;      /* vorher „browser default“ (meist 16, wirkt bei dir aber kleiner durch andere Defaults) */
   line-height: 1.45;
 }
 

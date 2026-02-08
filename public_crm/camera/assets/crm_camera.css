@@ -99,10 +99,6 @@
    3) AUTOCOMPLETE (nur Layering/Positioning)
 ================================================================================================= */
 
-/* Parent für absolute Suggest-Liste */
-.autocomplete{
-  position:relative;
-}
 
 /* Flyout MUSS über Cards/Sections liegen */
 .suggest{

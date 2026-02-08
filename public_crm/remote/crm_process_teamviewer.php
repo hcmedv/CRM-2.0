@@ -5,18 +5,11 @@ declare(strict_types=1);
  * Datei: /public_crm/remote/crm_process_teamviewer.php
  *
  * Zweck:
- * - Liest RAW TeamViewer Poll-Datei (festes RAW-Format)
+ * - Verarbeitet TeamViewer Poll-Daten (festes RAW-Format)
+ * - Primär: Payload aus api_teamviewer_read.php (In-Memory)
+ * - Fallback (Debug): raw_store Datei, falls vorhanden
  * - Baut Patches via rules_teamviewer.php
  * - Upsert in Events-Store via Writer
- *
- * FESTES RAW-Format:
- * {
- *   fetched_at: "...",
- *   request: {...},
- *   data: { records: [ ... ] }
- * }
- *
- * Keine Fallback-Formate.
  */
 
 require_once __DIR__ . '/../_inc/bootstrap.php';
@@ -50,7 +43,11 @@ function TVP_Log(string $mod, string $msg, array $ctx = []): void
 
     $file = rtrim($dir, '/') . '/process_' . date('Y-m-d') . '.log';
     $row  = ['ts' => date('c'), 'msg' => $msg, 'ctx' => $ctx];
-    @file_put_contents($file, json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL, FILE_APPEND);
+    @file_put_contents(
+        $file,
+        json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
+        FILE_APPEND
+    );
 }
 
 function TVP_ReadJson(string $file, array $default = []): array
@@ -62,25 +59,43 @@ function TVP_ReadJson(string $file, array $default = []): array
     return is_array($j) ? $j : $default;
 }
 
-/* ---------------- Paths ---------------- */
+/* ---------------- Data Path ---------------- */
 
-$dataDir = CRM_MOD_PATH($MOD, 'data');
-if ($dataDir === '') {
+$dataBaseDir = CRM_MOD_PATH($MOD, 'data');
+if ($dataBaseDir === '') {
     TVP_Out(['ok' => false, 'error' => 'data_path_missing'], 500);
 }
 
-$api = (array)CRM_MOD_CFG($MOD, 'api', []);
-$rawFilename = (string)($api['filename_raw'] ?? 'teamviewer_poll_raw.json');
-
-$rawFile = rtrim($dataDir, '/') . '/' . $rawFilename;
-
 /* ---------------- Load RAW (fixed schema) ---------------- */
 
-$raw  = TVP_ReadJson($rawFile, []);
+// Primär: In-Memory Payload aus api_teamviewer_read.php
+$raw     = [];
+$rawFile = null;
+
+if (isset($GLOBALS['CRM_TV_POLL_PAYLOAD']) && is_array($GLOBALS['CRM_TV_POLL_PAYLOAD'])) {
+    $raw = (array)$GLOBALS['CRM_TV_POLL_PAYLOAD'];
+} else {
+    // Fallback (Debug): Datei aus raw_store.* (nur wenn vorhanden)
+    $rawStore = (array)CRM_MOD_CFG($MOD, 'raw_store', []);
+    $fileName = (string)($rawStore['filename_current'] ?? 'teamviewer_raw_current.json');
+
+    // CRM_MOD_PATH('teamviewer','data') ist bereits /data/teamviewer/
+    // => kein data_dir nochmals anhängen
+    $rawFile = rtrim($dataBaseDir, '/') . '/' . $fileName;
+
+    $raw = TVP_ReadJson($rawFile, []);
+}
+
 $data = (array)($raw['data'] ?? []);
 
 if (!isset($data['records']) || !is_array($data['records'])) {
-    TVP_Log($MOD, 'raw_format_invalid', ['raw_file' => $rawFile, 'keys' => array_keys($raw)]);
+    TVP_Log($MOD, 'raw_format_invalid', [
+        'raw_file'    => $rawFile,
+        'has_globals' => isset($GLOBALS['CRM_TV_POLL_PAYLOAD']),
+        'keys'        => is_array($raw) ? array_keys($raw) : [],
+        'data_keys'   => is_array($data) ? array_keys($data) : [],
+    ]);
+
     TVP_Out([
         'ok'       => false,
         'error'    => 'raw_format_invalid',
@@ -94,17 +109,18 @@ $records = count($items);
 /* ---------------- Rules ---------------- */
 
 $rulesFile = CRM_ROOT . '/_rules/teamviewer/rules_teamviewer.php';
-if (is_file($rulesFile)) {
-    require_once $rulesFile;
-    TVP_Log($MOD, 'rules_loaded', ['file' => $rulesFile]);
-} else {
+if (!is_file($rulesFile)) {
     TVP_Log($MOD, 'rules_missing', ['file' => $rulesFile]);
     TVP_Out(['ok' => false, 'error' => 'rules_missing', 'file' => $rulesFile], 500);
 }
 
+require_once $rulesFile;
+
 if (!function_exists('RULES_TEAMVIEWER_BuildPatch')) {
     TVP_Out(['ok' => false, 'error' => 'rules_missing_entrypoint'], 500);
 }
+
+TVP_Log($MOD, 'rules_loaded', ['file' => $rulesFile]);
 
 /* ---------------- Writer ---------------- */
 
@@ -114,17 +130,19 @@ if (!is_file($writerLib)) {
 }
 require_once $writerLib;
 
-$writerAvailable = class_exists('CRM_EventGenerator') && method_exists('CRM_EventGenerator', 'upsert');
-if (!$writerAvailable) {
+if (!class_exists('CRM_EventGenerator') || !method_exists('CRM_EventGenerator', 'upsert')) {
     TVP_Out(['ok' => false, 'error' => 'writer_invalid'], 500);
 }
 
-TVP_Log($MOD, 'process_start', ['records' => $records, 'raw_file' => $rawFile]);
+TVP_Log($MOD, 'process_start', [
+    'records'  => $records,
+    'raw_file' => $rawFile,
+]);
 
 /* ---------------- Process ---------------- */
 
-$upserts      = 0;
-$errors       = 0;
+$upserts = 0;
+$errors  = 0;
 $previewFirstPatch = null;
 
 foreach ($items as $row) {
@@ -133,10 +151,12 @@ foreach ($items as $row) {
     try {
         $patch = RULES_TEAMVIEWER_BuildPatch($row);
 
-        if ($previewFirstPatch === null) { $previewFirstPatch = $patch; }
+        if ($previewFirstPatch === null) {
+            $previewFirstPatch = $patch;
+        }
 
         $res = CRM_EventGenerator::upsert('teamviewer', 'remote', $patch);
-        if (is_array($res) && (bool)($res['ok'] ?? false)) {
+        if (is_array($res) && ($res['ok'] ?? false)) {
             $upserts++;
         } else {
             $errors++;
@@ -154,10 +174,9 @@ TVP_Log($MOD, 'process_done', [
 ]);
 
 TVP_Out([
-    'ok'                 => true,
-    'writer_available'    => true,
+    'ok'                  => true,
     'records'             => $records,
     'upserts'             => $upserts,
     'errors'              => $errors,
-    'preview_first_patch'  => $previewFirstPatch,
+    'preview_first_patch' => $previewFirstPatch,
 ]);

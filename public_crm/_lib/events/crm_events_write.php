@@ -7,17 +7,19 @@ declare(strict_types=1);
  * Zweck (minimal / Core):
  * - Zentrale Schreibstelle für den Event-Store (JSON)
  * - Upsert per event_id ODER refs[{ns,id}] (Idempotenz)
- * - Rekursiver Patch-Merge (numerische Arrays ersetzen)
+ * - Rekursiver Patch-Merge
+ *   - ASSOC Arrays: rekursiv mergen
+ *   - LIST (numerisch/indexed): komplett ersetzen
  * - Lock + atomisches Schreiben (shared-hosting safe)
  * - KEINE Enrichment- oder Connector-Logik
  *
  * Abhängigkeiten:
- * - bootstrap.php (CRM_CFG, CRM_MOD_CFG, CRM_MOD_PATH)
+ * - bootstrap.php (CRM_MOD_CFG, CRM_MOD_PATH)
  *
  * Modul:
  * - events
  *
- * Schnittstelle (für Process-Skripte):
+ * Schnittstelle:
  * - CRM_EventGenerator::upsert(string $eventSource, string $eventType, array $patch): array
  *
  * Hinweis:
@@ -44,7 +46,6 @@ final class CRM_Events_Write
             return self::out(false, 'type_not_allowed', ['event_type' => $eventType]);
         }
 
-        // Store-Datei
         $storeFile = self::storeFile('filename_store', 'events.json');
 
         // Store laden (inkl. Lock)
@@ -55,11 +56,10 @@ final class CRM_Events_Write
 
         try
         {
-            // Ziel-Event finden (event_id oder refs)
             $idx = self::findEventIndex($store, $patch);
 
             if ($idx === -1) {
-                $event  = self::buildNewEvent($eventSource, $eventType, $patch);
+                $event   = self::buildNewEvent($eventSource, $eventType, $patch);
                 $store[] = $event;
                 $idx     = count($store) - 1;
                 $isNew   = true;
@@ -67,10 +67,8 @@ final class CRM_Events_Write
                 $store[$idx] = self::mergeEvent($store[$idx], $patch);
             }
 
-            // Limits anwenden
             $store = self::applyLimits($store);
 
-            // Schreiben
             self::writeStore($storeFile, $store);
         }
         finally
@@ -185,7 +183,7 @@ final class CRM_Events_Write
     {
         self::ensureDir(dirname($file));
 
-        $lock = fopen($file . '.lock', 'c');
+        $lock = @fopen($file . '.lock', 'c');
         if (is_resource($lock)) {
             @flock($lock, LOCK_EX);
         }
@@ -204,6 +202,12 @@ final class CRM_Events_Write
             $json = [];
         }
 
+        // Erwartung: Store ist ein Array von Events
+        // (wenn jemand mal ein Wrapper-Objekt schreibt, ignorieren wir es defensiv)
+        if (!self::isList($json)) {
+            $json = [];
+        }
+
         return [$json, $lock];
     }
 
@@ -217,7 +221,6 @@ final class CRM_Events_Write
         );
 
         if (!is_string($json)) {
-            // sehr defensiv: falls json_encode fehlschlägt, nicht die alte Datei zerstören
             return;
         }
 
@@ -287,16 +290,28 @@ final class CRM_Events_Write
         }
     }
 
+    private static function isList(array $a): bool
+    {
+        if ($a === []) { return true; }
+        return array_keys($a) === range(0, count($a) - 1);
+    }
+
     private static function arrayMergeDistinct(array $a, array $b): array
     {
+        // Wenn $b eine LIST ist, ersetzt sie $a komplett (wichtig für refs/items/tags etc.)
+        if (self::isList($b)) {
+            return $b;
+        }
+
         foreach ($b as $k => $v) {
+            // numeric keys: setzen
             if (is_int($k)) {
-                // numerische Arrays: ersetzen/setzen (kein Merge)
                 $a[$k] = $v;
                 continue;
             }
 
             if (isset($a[$k]) && is_array($a[$k]) && is_array($v)) {
+                // LIST ersetzt, ASSOC merged rekursiv
                 $a[$k] = self::arrayMergeDistinct($a[$k], $v);
             } else {
                 $a[$k] = $v;

@@ -15,10 +15,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $p = (string)($_POST['pass'] ?? '');
     if (!CRM_Auth_Login($u, $p)) {
         $err = 'Login fehlgeschlagen';
+
+        
     } else {
+
+        // PoC: wenn User 2FA aktiv hat -> erst totp.php
+        $needs2fa = false;
+        $data = json_decode((string)@file_get_contents(CRM_LOGIN_FILE), true);
+
+        if (is_array($data)) {
+            foreach ($data as $row) {
+                if ((string)($row['user'] ?? '') === $u) {
+                    $needs2fa = (bool)($row['2fa'] ?? false) && ((string)($row['2fa_secret'] ?? '') !== '');
+                    break;
+                }
+            }
+        }
+
+        if ($needs2fa) {
+            header('Location: /login/totp?next=/index.php');
+            exit;
+        }
+
         header('Location: /index.php');
         exit;
     }
+
+
+
+
+
+
+
+
+
+
+
+
 }
 ?><!DOCTYPE html>
 <html lang="de">

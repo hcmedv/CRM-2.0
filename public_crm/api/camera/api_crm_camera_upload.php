@@ -8,7 +8,7 @@ error_reporting(E_ALL);
 /*
  * Datei: /public/api/camera/api_crm_camera_upload.php
  * Zweck:
- * - Kamera Upload Endpoint (JSON)
+ * - Kamera Upload Endpoint (multipart/form-data)
  * - Auth: CRM_Auth_RequireLoginApi()
  * - Optional CSRF-Check (falls CRM_CsrfCheckRequest existiert)
  * - Modul-Guards via settings_crm.php:
@@ -24,6 +24,10 @@ error_reporting(E_ALL);
  *
  * Antwort:
  * - { ok:true, item:{ id, ts, kunden_nummer, w,h, full, thumb } }
+ *
+ * WICHTIG:
+ * - full/thumb sind PREVIEW-URLs über api_crm_camera_file.php (Auth-geschützt)
+ *   und NICHT direkte /tmp/... Pfade.
  */
 
 require_once __DIR__ . '/../../_inc/bootstrap.php';
@@ -59,21 +63,28 @@ function FN_CfgGet(string $path, $default = null)
     }
 
     $cfg = $GLOBALS['__CRM_CONFIG'] ?? null;
-    if (!is_array($cfg)) return $default;
+    if (!is_array($cfg)) {
+        return $default;
+    }
 
     $parts = explode('.', $path);
     $cur = $cfg;
     foreach ($parts as $p) {
-        if (!is_array($cur) || !array_key_exists($p, $cur)) return $default;
+        if (!is_array($cur) || !array_key_exists($p, $cur)) {
+            return $default;
+        }
         $cur = $cur[$p];
     }
+
     return $cur;
 }
 
 function FN_AssertModuleEnabled(string $module): void
 {
     $modules = FN_CfgGet('modules', []);
-    if (!is_array($modules)) $modules = [];
+    if (!is_array($modules)) {
+        $modules = [];
+    }
 
     if (!isset($modules[$module]) || $modules[$module] !== true) {
         FN_Exit(['ok' => false, 'error' => 'module_disabled', 'module' => $module], 403);
@@ -83,7 +94,9 @@ function FN_AssertModuleEnabled(string $module): void
 function FN_AssertEventSourceAllowed(string $source): void
 {
     $allowed = FN_CfgGet('events.allowed.event_sources', []);
-    if (!is_array($allowed)) $allowed = [];
+    if (!is_array($allowed)) {
+        $allowed = [];
+    }
 
     if (!in_array($source, $allowed, true)) {
         FN_Exit(['ok' => false, 'error' => 'event_source_not_allowed', 'source' => $source], 403);
@@ -110,7 +123,9 @@ $tmpSubDir  = (string)FN_CfgGet('camera.upload.tmp_dir', 'camera'); // unterhalb
 function FN_SafeToken(string $s, int $maxLen = 64): string
 {
     $s = trim($s);
-    if ($s === '') { return ''; }
+    if ($s === '') {
+        return '';
+    }
     $s = preg_replace('/[^0-9A-Za-z_\-]/', '', $s) ?? '';
     return substr($s, 0, $maxLen);
 }
@@ -118,14 +133,18 @@ function FN_SafeToken(string $s, int $maxLen = 64): string
 function FN_SafeKn(string $s): string
 {
     $s = trim($s);
-    if ($s === '') { return ''; }
+    if ($s === '') {
+        return '';
+    }
     $s = preg_replace('/[^0-9A-Za-z_\-]/', '', $s) ?? '';
     return substr($s, 0, 32);
 }
 
 function FN_EnsureDir(string $dir): bool
 {
-    if (is_dir($dir)) { return true; }
+    if (is_dir($dir)) {
+        return true;
+    }
     @mkdir($dir, 0775, true);
     return is_dir($dir);
 }
@@ -138,10 +157,14 @@ function FN_RandToken(int $bytes = 6): string
 function FN_LoadImageFromUpload(string $tmpName): array
 {
     $data = @file_get_contents($tmpName);
-    if ($data === false || $data === '') { return [null, 'upload_read_failed']; }
+    if ($data === false || $data === '') {
+        return [null, 'upload_read_failed'];
+    }
 
     $img = @imagecreatefromstring($data);
-    if (!$img) { return [null, 'image_decode_failed']; }
+    if (!$img) {
+        return [null, 'image_decode_failed'];
+    }
 
     return [$img, ''];
 }
@@ -156,7 +179,9 @@ function FN_CreateThumb($img, string $thumbPath, int $thumbMaxPx): bool
 {
     $w = imagesx($img);
     $h = imagesy($img);
-    if ($w <= 0 || $h <= 0) { return false; }
+    if ($w <= 0 || $h <= 0) {
+        return false;
+    }
 
     $thumbMaxPx = max(64, (int)$thumbMaxPx);
 
@@ -165,24 +190,23 @@ function FN_CreateThumb($img, string $thumbPath, int $thumbMaxPx): bool
     $nh = (int)max(1, floor($h * $scale));
 
     $thumb = imagecreatetruecolor($nw, $nh);
-    if (!$thumb) { return false; }
+    if (!$thumb) {
+        return false;
+    }
 
     imagecopyresampled($thumb, $img, 0, 0, 0, 0, $nw, $nh, $w, $h);
 
     return FN_SaveJpeg($thumb, $thumbPath, 85);
 }
 
-/*
- * Wichtig:
- * - TMP liegt im Filesystem unter paths.tmp/<tmpSubDir>
- * - Public-Mapping ist /tmp/<tmpSubDir> (über public_crm/tmp -> ../tmp)
- * => URL-Basis NICHT aus FS-Pfad "erraten", sondern aus tmpSubDir ableiten.
- */
-function FN_PublicBaseFromTmpSubDir(string $tmpSubDir): string
+function FN_BuildCameraFileUrlTmp(string $type, string $session, string $file): string
 {
-    $tmpSubDir = trim(str_replace('\\', '/', $tmpSubDir), '/');
-    if ($tmpSubDir === '') { return '/tmp'; }
-    return '/tmp/' . $tmpSubDir; // z.B. /tmp/camera
+    $type = ($type === 'thumb') ? 'thumb' : 'full';
+
+    return '/api/camera/api_crm_camera_file.php?scope=tmp'
+        . '&type=' . rawurlencode($type)
+        . '&session=' . rawurlencode($session)
+        . '&file=' . rawurlencode($file);
 }
 
 /* =========================================================================================
@@ -292,8 +316,7 @@ $h = imagesy($img);
 $ok1 = FN_SaveJpeg($img, $fullPath, 90);
 $ok2 = FN_CreateThumb($img, $thumbPath, $thumbMaxPx);
 
-// PHP 8+ (und 8.5) – imagedestroy ist wirkungslos/deprecated
-// daher absichtlich KEIN imagedestroy() mehr.
+// PHP 8+ – imagedestroy ist ok, aber nicht nötig; wir vermeiden es hier bewusst.
 
 if (!$ok1 || !$ok2) {
     @unlink($fullPath);
@@ -302,10 +325,8 @@ if (!$ok1 || !$ok2) {
 }
 
 /* =========================================================================================
-   Public URLs (für UI Vorschau)
+   Public URLs (für UI Vorschau) – über File-API
    ========================================================================================= */
-
-$publicBase = FN_PublicBaseFromTmpSubDir($tmpSubDir);
 
 $item = [
     'id'            => $id,
@@ -314,8 +335,8 @@ $item = [
     'kunden_nummer' => $kn,
     'w'             => $w,
     'h'             => $h,
-    'full'          => $publicBase . '/' . $session . '/' . $fullName,
-    'thumb'         => $publicBase . '/' . $session . '/thumb/' . $thumbName,
+    'full'          => FN_BuildCameraFileUrlTmp('full', $session, $fullName),
+    'thumb'         => FN_BuildCameraFileUrlTmp('thumb', $session, $thumbName),
 ];
 
 $metaLine = [

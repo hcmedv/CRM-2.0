@@ -2,10 +2,11 @@
 declare(strict_types=1);
 
 /*
- * Datei: /public/api/camera/api_camera_file.php
+ * Datei: /public/api/camera/api_crm_camera_file.php
+ *
  * Zweck:
  * - Auth-geschützter File-Endpoint für Kamera-Bilder (TMP + DATA)
- * - Liefert Full/Thumb für UI-Preview (Lightbox/Thumbnails) und finalisierte Dateien aus /data
+ * - Liefert Full/Thumb für UI-Preview (Queue/Lightbox) und finalisierte Dateien aus /data
  *
  * Query:
  * - scope   (string)  'tmp' | 'data'   (default: tmp)
@@ -18,8 +19,10 @@ declare(strict_types=1);
  *
  * DATA (scope=data):
  * - kn      (string)  Pflicht (Kundennummer)
- * - session (string)  optional (falls später pro Session final abgelegt wird)
- * - Pfad: <MOD_DATA>/<files.store_dir>/<kn>/[<session>/][thumb/]<file>
+ * - Pfad: <MOD_DATA>/<kn>/[thumb/]<file>
+ *
+ * Hinweis:
+ * - thumb/ wird NICHT im Event gespeichert. Dieser Endpoint baut thumb/ selbst über type=thumb.
  */
 
 require_once __DIR__ . '/../../_inc/bootstrap.php';
@@ -27,7 +30,16 @@ require_once CRM_ROOT . '/_inc/auth.php';
 
 CRM_Auth_RequireLoginApi();
 
+if (function_exists('CRM_CsrfCheckRequest')) {
+    // Optional – falls du GETs ohne CSRF willst, diese Zeile entfernen
+    CRM_CsrfCheckRequest();
+}
+
 header('X-Content-Type-Options: nosniff');
+
+/* =========================================================
+   Helpers
+   ========================================================= */
 
 function FN_SafeToken(string $s, int $maxLen = 64): string
 {
@@ -70,14 +82,53 @@ function FN_Exit(int $code, string $msg = ''): void
     exit;
 }
 
-/* -------------------------------------------------
+function FN_PathNorm(string $p): string
+{
+    return rtrim(str_replace('\\', '/', $p), '/');
+}
+
+function FN_IsPathInside(string $path, string $root): bool
+{
+    $path = FN_PathNorm($path);
+    $root = FN_PathNorm($root);
+    if ($path === '' || $root === '') { return false; }
+    return (strpos($path . '/', $root . '/') === 0);
+}
+
+function FN_TmpRootResolved(): string
+{
+    $base = FN_PathNorm((string)CRM_MOD_PATH('camera', 'tmp')); // kann .../tmp oder .../tmp/camera sein
+
+    $tmpSub = (string)CRM_MOD_CFG('camera', 'upload.tmp_dir', 'camera');
+    $tmpSub = trim(str_replace('\\', '/', $tmpSub), '/');
+
+    if ($base === '') { return ''; }
+
+    if ($tmpSub !== '' && preg_match('#/' . preg_quote($tmpSub, '#') . '$#', $base)) {
+        return $base;
+    }
+
+    return $base . ($tmpSub !== '' ? '/' . $tmpSub : '');
+}
+
+function FN_DataRootResolvedForKn(string $kn): string
+{
+    $base = FN_PathNorm((string)CRM_MOD_PATH('camera', 'data')); // z.B. .../data/camera
+    if ($base === '') { return ''; }
+
+    // Finalize legt bei dir direkt unter <dataBase>/<KN>/... ab (ohne extra store_dir)
+    return $base . '/' . $kn;
+}
+
+/* =========================================================
    Input
-------------------------------------------------- */
+   ========================================================= */
+
 $scope   = strtolower(trim((string)($_GET['scope'] ?? 'tmp')));
 $type    = strtolower(trim((string)($_GET['type'] ?? 'full')));
-$file    = FN_SafeFile((string)($_GET['file'] ?? ''));
 
-$session = FN_SafeToken((string)($_GET['session'] ?? ''), 64);
+$file    = FN_SafeFile((string)($_GET['file'] ?? ''));
+$session = FN_SafeToken((string)($_GET['session'] ?? ''), 80);
 $kn      = FN_SafeToken((string)($_GET['kn'] ?? ''), 32);
 
 if ($file === '') {
@@ -87,24 +138,10 @@ if ($file === '') {
 if ($scope !== 'data') { $scope = 'tmp'; }
 if ($type !== 'thumb') { $type = 'full'; }
 
-/* -------------------------------------------------
-   Settings / Roots (aus settings_camera.php)
-------------------------------------------------- */
-$tmpBase  = rtrim(str_replace('\\', '/', (string)CRM_MOD_PATH('camera', 'tmp')), '/');
-$dataBase = rtrim(str_replace('\\', '/', (string)CRM_MOD_PATH('camera', 'data')), '/');
-
-$tmpDirRel   = (string)CRM_MOD_CFG('camera', 'upload.tmp_dir', 'camera');     // z.B. 'camera'
-$storeDirRel = (string)CRM_MOD_CFG('camera', 'files.store_dir', 'camera');    // z.B. 'camera'
-
-$tmpRoot  = $tmpBase  . '/' . ltrim($tmpDirRel, '/');
-$dataRoot = $dataBase . '/' . ltrim($storeDirRel, '/');
-
-$tmpRoot  = rtrim(str_replace('\\', '/', $tmpRoot), '/');
-$dataRoot = rtrim(str_replace('\\', '/', $dataRoot), '/');
-
-/* -------------------------------------------------
+/* =========================================================
    Build Path
-------------------------------------------------- */
+   ========================================================= */
+
 $root = '';
 $path = '';
 
@@ -114,7 +151,11 @@ if ($scope === 'tmp') {
         FN_Exit(400, 'missing_session');
     }
 
-    $root = $tmpRoot;
+    $root = FN_TmpRootResolved();
+    if ($root === '') {
+        FN_Exit(500, 'tmp_root_missing');
+    }
+
     $baseDir = $root . '/' . $session;
 
     $path = ($type === 'thumb')
@@ -129,28 +170,27 @@ if ($scope === 'tmp') {
         FN_Exit(400, 'missing_kn');
     }
 
-    $root = $dataRoot;
-    $baseDir = $root . '/' . $kn;
-
-    if ($session !== '') {
-        $baseDir .= '/' . $session;
+    $root = FN_DataRootResolvedForKn($kn);
+    if ($root === '') {
+        FN_Exit(500, 'data_root_missing');
     }
 
     $path = ($type === 'thumb')
-        ? ($baseDir . '/thumb/' . $file)
-        : ($baseDir . '/' . $file);
+        ? ($root . '/thumb/' . $file)
+        : ($root . '/' . $file);
 
     header('Cache-Control: private, max-age=3600');
 }
 
-/* -------------------------------------------------
+/* =========================================================
    Realpath-Safety
-------------------------------------------------- */
+   ========================================================= */
+
 $rootReal = realpath($root);
 if ($rootReal === false) {
     FN_Exit(500, 'root_missing');
 }
-$rootReal = rtrim(str_replace('\\', '/', $rootReal), '/');
+$rootReal = FN_PathNorm($rootReal);
 
 $pathReal = realpath($path);
 if ($pathReal === false) {
@@ -158,7 +198,7 @@ if ($pathReal === false) {
 }
 $pathReal = str_replace('\\', '/', $pathReal);
 
-if (strpos($pathReal, $rootReal . '/') !== 0) {
+if (!FN_IsPathInside($pathReal, $rootReal)) {
     FN_Exit(400, 'path_invalid');
 }
 
@@ -166,9 +206,10 @@ if (!is_file($pathReal)) {
     FN_Exit(404, 'not_found');
 }
 
-/* -------------------------------------------------
+/* =========================================================
    Output
-------------------------------------------------- */
+   ========================================================= */
+
 header('Content-Type: ' . FN_MimeByExt($file));
 
 $fp = fopen($pathReal, 'rb');

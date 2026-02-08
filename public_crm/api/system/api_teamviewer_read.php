@@ -6,7 +6,8 @@ declare(strict_types=1);
  *
  * Zweck:
  * - TeamViewer Connections via API abrufen (RAW)
- * - RAW im Modul-Datenpfad speichern
+ * - Debug-Kopie der RAW Daten OPTIONAL speichern (raw_store.*)
+ * - Payload IMMER an Processor weiterreichen (In-Memory), unabhängig von raw_store.enabled
  * - Danach Processor starten (Pfad aus Settings): teamviewer.api.process_path_file
  *
  * Zugriff:
@@ -231,10 +232,8 @@ if ($dataDir === '') {
     TV_Out(['ok' => false, 'error' => 'data_path_missing'], 500);
 }
 
-$api = (array)CRM_MOD_CFG($MOD, 'api', []);
-$rawFilename = (string)($api['filename_raw'] ?? 'teamviewer_poll_raw.json');
-
-$rawFile = rtrim($dataDir, '/') . '/' . $rawFilename;
+$api      = (array)CRM_MOD_CFG($MOD, 'api', []);
+$rawStore = (array)CRM_MOD_CFG($MOD, 'raw_store', []);
 
 /* ---------------- URL Build ---------------- */
 
@@ -247,7 +246,6 @@ TV_Log($MOD, 'request_start', [
     'range_days' => $u['range_days'] ?? null,
     'from'       => $u['from'] ?? null,
     'to'         => $u['to'] ?? null,
-    'raw_file'   => $rawFile,
 ]);
 
 /* ---------------- Fetch ---------------- */
@@ -284,15 +282,37 @@ $payload = [
     'data' => $tvJson,
 ];
 
-TV_FileWriteAtomic($rawFile, json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+/* ---------------- RAW Debug Copy (optional) ---------------- */
 
-$recCount = null;
-if (isset($tvJson['records']) && is_array($tvJson['records'])) { $recCount = count($tvJson['records']); }
+$rawWritten = false;
+$rawFile    = null;
 
-TV_Log($MOD, 'raw_written', [
-    'file'    => $rawFile,
-    'records' => $recCount,
-]);
+if (($rawStore['enabled'] ?? false) === true) {
+    $fileName = (string)($rawStore['filename_current'] ?? 'teamviewer_raw_current.json');
+
+    // CRM_MOD_PATH('teamviewer','data') ist bereits /data/teamviewer/
+    // => kein data_dir nochmals anhängen
+    $rawFile = rtrim($dataDir, '/') . '/' . $fileName;
+
+    TV_FileWriteAtomic(
+        $rawFile,
+        json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)
+    );
+
+    $rawWritten = true;
+
+    $recCount = null;
+    if (isset($tvJson['records']) && is_array($tvJson['records'])) { $recCount = count($tvJson['records']); }
+
+    TV_Log($MOD, 'raw_written', [
+        'file'    => $rawFile,
+        'records' => $recCount,
+    ]);
+}
+
+/* ---------------- Processor Input (immer) ---------------- */
+
+$GLOBALS['CRM_TV_POLL_PAYLOAD'] = $payload;
 
 /* ---------------- Process ---------------- */
 
@@ -301,11 +321,12 @@ $procAbs = CRM_ROOT . '/' . ltrim($procRel, '/');
 
 if (!is_file($procAbs)) {
     TV_Out([
-        'ok'        => true,
-        'fetched'   => true,
-        'processed' => false,
-        'raw_file'  => $rawFile,
-        'process'   => $procRel,
+        'ok'          => true,
+        'fetched'     => true,
+        'processed'   => false,
+        'raw_written' => $rawWritten,
+        'raw_file'    => $rawFile,
+        'process'     => $procRel,
     ], 200);
 }
 
@@ -316,12 +337,13 @@ $out = (string)ob_get_clean();
 $j = json_decode($out, true);
 if (is_array($j)) {
     TV_Out([
-        'ok'        => true,
-        'fetched'   => true,
-        'processed' => true,
-        'raw_file'  => $rawFile,
-        'process'   => $procRel,
-        'processor' => $j,
+        'ok'          => true,
+        'fetched'     => true,
+        'processed'   => true,
+        'raw_written' => $rawWritten,
+        'raw_file'    => $rawFile,
+        'process'     => $procRel,
+        'processor'   => $j,
     ], 200);
 }
 
@@ -329,6 +351,7 @@ TV_Out([
     'ok'            => true,
     'fetched'       => true,
     'processed'     => true,
+    'raw_written'   => $rawWritten,
     'raw_file'      => $rawFile,
     'process'       => $procRel,
     'processor_raw' => $out,

@@ -9,6 +9,7 @@
    - Customer Search (Autocomplete) über /api/crm/api_crm_search_customers.php?type=customer
    - Upload Queue -> /api/camera/api_crm_camera_upload.php (multipart/form-data)
    - Cleanup Session -> /api/camera/api_crm_camera_cleanup.php (POST)
+   - Commit (Dokumentieren) -> /api/crm/api_crm_events_commit.php (POST JSON)
 
    Erwartete DOM-IDs:
    - cam_video, cam_start, cam_stop, cam_snap, cam_res, cam_status
@@ -30,8 +31,7 @@
   const API_SEARCH  = "/api/crm/api_crm_search_customers.php";
   const API_UPLOAD  = "/api/camera/api_crm_camera_upload.php";
   const API_CLEANUP = "/api/camera/api_crm_camera_cleanup.php";
-  // Commit lassen wir vorerst als Hook (kommt als nächstes):
-  // const API_COMMIT  = "/api/crm/api_crm_events_commit.php";
+  const API_COMMIT  = "/api/crm/api_crm_events_commit.php";
 
   /* =========================================================================================
      [BLOCK: UTILS]
@@ -63,11 +63,9 @@
   }
 
   function getCsrfToken() {
-    // 1) meta tag
     const m = document.querySelector('meta[name="csrf-token"], meta[name="csrf_token"], meta[name="csrf"]');
     if (m && m.getAttribute("content")) return String(m.getAttribute("content") || "").trim();
 
-    // 2) window config (best effort)
     const w = window.__CRM_CONFIG || window.CRM_CONFIG || null;
     if (w && typeof w === "object") {
       const v =
@@ -102,7 +100,15 @@
     }
   }
 
-  const SESSION_ID = getOrCreateSessionId();
+  function setNewSessionId() {
+    const key = "crm_camera_session";
+    const sid = `cam_${Date.now()}_${randHex(10)}`;
+    try { sessionStorage.setItem(key, sid); } catch (_) {}
+    return sid;
+  }
+
+  // WICHTIG: nach erfolgreichem Commit müssen wir eine NEUE Session verwenden
+  let SESSION_ID = getOrCreateSessionId();
 
   /* =========================================================================================
      [BLOCK: STATE]
@@ -111,6 +117,7 @@
     stream: null,
     snapIndex: 0,
     uploading: false,
+    committing: false,
     // queue items:
     // {
     //   id, blob, localUrl, name,
@@ -163,19 +170,22 @@
     return kn.length > 0;
   }
 
+  function getKnOrEmpty() {
+    return String((numEl && numEl.value) || "").trim();
+  }
+
   function updateQueueInfo() {
     setText(queueInfoEl, `Fotos: ${state.queue.length}`);
 
     const hasPhotos = state.queue.length > 0;
     const hasCust   = hasCustomerSelected();
-    const canUpload = hasPhotos && hasCust && !state.uploading;
+    const canUpload = hasPhotos && hasCust && !state.uploading && !state.committing;
 
     setDisabled(btnUpload, !canUpload);
-    setDisabled(btnClear, !(hasPhotos || hasCust) || state.uploading);
+    setDisabled(btnClear, !(hasPhotos || hasCust) || state.uploading || state.committing);
 
-    // Dokumentieren: später ggf. "nur wenn upload fertig"
     const allUploaded = hasPhotos && state.queue.every(it => it.uploaded);
-    setDisabled(btnDoc, !(allUploaded && hasCust) || state.uploading);
+    setDisabled(btnDoc, !(allUploaded && hasCust) || state.uploading || state.committing);
   }
 
   function updateCameraButtons(isOn) {
@@ -274,12 +284,8 @@
         openLightbox(getFullUrl(it), it.name || `Foto ${idx + 1}`);
       });
 
-      // Upload badge (optional)
-      if (it.uploaded) {
-        wrap.classList.add("is-uploaded");
-      } else {
-        wrap.classList.remove("is-uploaded");
-      }
+      if (it.uploaded) wrap.classList.add("is-uploaded");
+      else wrap.classList.remove("is-uploaded");
 
       wrap.appendChild(img);
       wrap.appendChild(rm);
@@ -303,6 +309,15 @@
     });
     state.queue = [];
     renderQueue();
+  }
+
+  function resetCustomerOnly() {
+    if (qEl) { qEl.disabled = false; qEl.value = ""; }
+    if (numEl) numEl.value = "";
+    if (srcEl) srcEl.value = "";
+    if (idEl)  idEl.value  = "";
+    if (previewEl) { previewEl.textContent = ""; previewEl.style.display = "none"; }
+    setCustomerChip("");
   }
 
   /* =========================================================================================
@@ -391,16 +406,12 @@
   }
 
   /* =========================================================================================
-     [BLOCK: UPLOAD]
+     [BLOCK: API CLEANUP]
   ========================================================================================= */
-  function getKnOrEmpty() {
-    return String((numEl && numEl.value) || "").trim();
-  }
-
-  async function apiCleanupSession() {
+  async function apiCleanupSessionBestEffort() {
     try {
       const csrf = getCsrfToken();
-      const headers = {};
+      const headers = { "Content-Type": "application/json" };
       if (csrf) headers["X-CSRF-Token"] = csrf;
 
       const res = await fetch(API_CLEANUP, {
@@ -410,7 +421,6 @@
         body: JSON.stringify({ session: SESSION_ID }),
       });
 
-      // Cleanup ist best-effort
       if (!res.ok) return false;
       const j = await res.json().catch(() => ({}));
       return !!j.ok;
@@ -419,6 +429,9 @@
     }
   }
 
+  /* =========================================================================================
+     [BLOCK: UPLOAD]
+  ========================================================================================= */
   async function uploadOne(it, idx, total) {
     const kn = getKnOrEmpty();
     if (!kn) throw new Error("missing_kunden_nummer");
@@ -428,7 +441,6 @@
     fd.append("session", SESSION_ID);
     fd.append("kunden_nummer", kn);
 
-    // Filename ist egal, server baut eigenen Namen
     const fn = `camera_${Date.now()}_${idx + 1}.jpg`;
     fd.append("image", it.blob, fn);
 
@@ -459,7 +471,8 @@
   }
 
   async function uploadAll() {
-    if (state.uploading) return;
+    if (state.uploading || state.committing) return;
+
     if (!hasCustomerSelected()) {
       setStatus("Upload: bitte zuerst Kunde wählen");
       return;
@@ -468,9 +481,6 @@
 
     state.uploading = true;
     updateQueueInfo();
-    setDisabled(btnUpload, true);
-    setDisabled(btnClear, true);
-    setDisabled(btnDoc, true);
 
     const total = state.queue.length;
 
@@ -481,17 +491,12 @@
 
         const item = await uploadOne(it, i, total);
 
-        // Update queue item
         it.uploaded = true;
         it.server = item;
 
-        // Optional: local preview URL freigeben (wir nutzen jetzt server thumb)
         try { if (it.localUrl) URL.revokeObjectURL(it.localUrl); } catch (_) {}
-        it.localUrl = it.localUrl || ""; // belassen (falls revoke fehlschlägt)
 
         renderQueue();
-
-        // kleine Pause (UI fühlt sich stabiler an)
         await sleep(30);
       }
 
@@ -501,6 +506,119 @@
       setStatus(`Upload: Fehler (${msg})`);
     } finally {
       state.uploading = false;
+      updateQueueInfo();
+    }
+  }
+
+  /* =========================================================================================
+     [BLOCK: COMMIT / DOKUMENTIEREN]
+  ========================================================================================= */
+  function buildCommitItemsFromQueue() {
+    return state.queue
+      .filter(it => it && it.uploaded && it.server && it.server.full && it.server.thumb)
+      .map(it => ({
+        full:  String(it.server.full),
+        thumb: String(it.server.thumb),
+        ts:    parseInt(it.server.ts || it.server.created_ts || it.server.createdTs || 0, 10) || Math.floor(Date.now() / 1000),
+        w:     parseInt(it.server.w || 0, 10) || undefined,
+        h:     parseInt(it.server.h || 0, 10) || undefined,
+      }))
+      .map(it => {
+        // undefined rauswerfen (sauber)
+        const o = {};
+        Object.keys(it).forEach(k => { if (it[k] !== undefined) o[k] = it[k]; });
+        return o;
+      });
+  }
+
+  async function commitDocumentation() {
+    if (state.committing || state.uploading) return;
+
+    const kn = getKnOrEmpty();
+    if (!kn) {
+      setStatus("Dokumentieren: bitte zuerst Kunde wählen");
+      return;
+    }
+
+    if (state.queue.length < 1) return;
+
+    const allUploaded = state.queue.every(it => it.uploaded);
+    if (!allUploaded) {
+      setStatus("Dokumentieren: bitte zuerst Upload ausführen");
+      return;
+    }
+
+    const items = buildCommitItemsFromQueue();
+    if (!items.length) {
+      setStatus("Dokumentieren: Fehler (keine Upload-Items)");
+      return;
+    }
+
+    state.committing = true;
+    updateQueueInfo();
+
+    try {
+      setStatus("Dokumentieren: sende …");
+
+      const payload = {
+        workflow_state: "open",
+        patch: {
+          event_source: "camera",
+          event_type:   "doc",
+          display: {
+            customer: { number: kn }
+          },
+          meta: {
+            doc: {
+              camera: {
+                session: SESSION_ID,
+                items: items
+              }
+            }
+          }
+        }
+      };
+
+      const csrf = getCsrfToken();
+      const headers = { "Content-Type": "application/json" };
+      if (csrf) headers["X-CSRF-Token"] = csrf;
+
+      const res = await fetch(API_COMMIT, {
+        method: "POST",
+        credentials: "same-origin",
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      // Commit liefert i.d.R. 200 auch bei Fehlern -> JSON prüfen
+      const j = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(`commit_http_${res.status}`);
+      }
+      if (!j || j.ok !== true || !j.event_id) {
+        const err = (j && (j.error || j.message)) ? String(j.error || j.message) : "commit_failed";
+        throw new Error(err);
+      }
+
+      const eid = String(j.event_id);
+      setStatus(`Dokumentieren: fertig (${eid})`);
+
+      // Server hat tmp session i.d.R. finalisiert + gelöscht -> lokal aufräumen
+      clearQueueLocalOnly();
+      resetCustomerOnly();
+
+      // NEUE Upload-Session starten (wichtig!)
+      SESSION_ID = setNewSessionId();
+
+      // Optional: direkt ins Event springen (wenn du willst)
+      // window.location.href = `/events/?event_id=${encodeURIComponent(eid)}`;
+
+    } catch (e) {
+      const msg = (e && e.message) ? String(e.message) : "commit_error";
+      setStatus(`Dokumentieren: Fehler (${msg})`);
+    } finally {
+      state.committing = false;
       updateQueueInfo();
     }
   }
@@ -520,18 +638,14 @@
   if (btnClear) btnClear.addEventListener("click", async (e) => {
     e.preventDefault();
 
-    // server cleanup (best effort), dann lokal löschen
     setStatus("Änderungen verwerfen …");
-    await apiCleanupSession();
-    clearQueueLocalOnly();
+    await apiCleanupSessionBestEffort();
 
-    // Kunde ebenfalls zurücksetzen (wie gewünscht per Chip/Klick - hier nur best effort)
-    if (qEl) { qEl.disabled = false; qEl.value = ""; }
-    if (numEl) numEl.value = "";
-    if (srcEl) srcEl.value = "";
-    if (idEl)  idEl.value  = "";
-    if (previewEl) { previewEl.textContent = ""; previewEl.style.display = "none"; }
-    setCustomerChip("");
+    clearQueueLocalOnly();
+    resetCustomerOnly();
+
+    // Neue Session, damit sauber ist
+    SESSION_ID = setNewSessionId();
 
     setStatus("Bereit");
     updateQueueInfo();
@@ -539,8 +653,7 @@
 
   if (btnDoc) btnDoc.addEventListener("click", (e) => {
     e.preventDefault();
-    // kommt als nächstes: Event anlegen (commit) und TMP -> DATA verschieben
-    setStatus("Dokumentieren: folgt (Commit/API)");
+    commitDocumentation();
   });
 
   /* =========================================================================================
@@ -557,7 +670,6 @@
     let abort = null;
     let tmr = null;
 
-    // Preview muss im DOM bleiben, aber nicht sichtbar
     previewEl.textContent = "";
     previewEl.style.display = "none";
 
@@ -589,11 +701,9 @@
       if (srcEl) srcEl.value = it.source || "";
       if (idEl)  idEl.value  = it.id || "";
 
-      // Preview bleibt leer/unsichtbar, aber Element muss existieren
       previewEl.innerHTML = "";
       previewEl.style.display = "none";
 
-      // Chip nur KN
       setCustomerChip(kn);
 
       clearSuggest();
@@ -664,9 +774,7 @@
         try {
           const list = await fetchCustomers(q);
           renderSuggest(list);
-        } catch (_) {
-          // ignore
-        }
+        } catch (_) {}
       }, 120);
     }
 
@@ -702,17 +810,18 @@
       if (!suggestEl.contains(e.target) && e.target !== qEl) clearSuggest();
     });
 
-    // optional: Chip-Klick als "Reset Kunde"
     if (chipEl) {
-      chipEl.addEventListener("click", async (e) => {
+      chipEl.addEventListener("click", (e) => {
         e.preventDefault();
 
-        // Kunde zurücksetzen (Queue lassen wir, Upload wird dann disabled)
+        if (state.uploading || state.committing) return;
+
         if (qEl) { qEl.disabled = false; qEl.value = ""; qEl.focus(); }
         if (numEl) numEl.value = "";
         if (srcEl) srcEl.value = "";
         if (idEl)  idEl.value  = "";
         setCustomerChip("");
+
         clearSuggest();
         updateQueueInfo();
       });
