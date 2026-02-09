@@ -174,7 +174,7 @@ if ($includeCustomers) {
    M365 Kontakte: Ranking
    ----------------------------- */
 if ($includeM365) {
-    $m365Json = CRM_LoadJsonFile(CFG_FILE_REQ('M365_CONTACTS_JSON'), []);
+    $m365Json = CRM_LoadJsonFile(CFG_FILE_REQ('CONTACTS_JSON'), []);
     $m365List = CRM_ExtractList($m365Json, ['items', 'contacts']);
 
     foreach ($m365List as $c) {

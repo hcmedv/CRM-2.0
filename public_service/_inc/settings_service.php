@@ -55,11 +55,16 @@ return [
             'close'   => '17:00',
         ],
 
+        // Sonderregel:
+        // - innerhalb Office-Hours soll CRM manual_state="off" NICHT als "Geschlossen" erscheinen,
+        //   sondern als "Unterwegs" (aka "nicht im Büro / nicht verfügbar, aber nicht 'geschlossen'")
+        'office_hours_off_maps_to' => 'away', // 'away' | 'busy' | 'online' | 'off'
+
         // Chips (Anzeige)
         'chips' => [
             'online' => ['label' => 'Geöffnet'],
             'busy'   => ['label' => 'Beschäftigt'],
-            'away'   => ['label' => 'Unterwegs'],
+            'away'   => ['label' => 'Abwesend'],
             'off'    => ['label' => 'Geschlossen'],
         ],
 
@@ -67,8 +72,8 @@ return [
         'texts' => [
             'online' => ['title' => 'Online',          'text' => 'Fernwartung aktuell möglich.'],
             'busy'   => ['title' => 'Beschäftigt',     'text' => 'Eingeschränkt verfügbar.'],
-            'away'   => ['title' => 'Unterwegs',       'text' => 'Antwort ggf. verzögert.'],
-            'off'    => ['title' => 'Nicht verfügbar', 'text' => 'Bitte Kontaktformular nutzen.'],
+            'away'   => ['title' => 'Abwesend',       'text' => 'Antwort ggf. verzögert.'],
+            'off'    => ['title' => 'Geschlossen', 'text' => 'Bitte Kontaktformular nutzen.'],
         ],
     ],
 ];

@@ -1,99 +1,99 @@
 /* Datei: /public_crm/_inc/assets/crm_user_status.js
-   Zweck:
-   - Status-Flyout: Buttons setzen manual_state
-   - Header-Icon Farbe:
-     away/off => rot
-     busy     => gelb (manuell ODER pbx_busy)
-     auto/online + pbx_busy => gelb
-     auto/online + !pbx_busy => grün
-   - Aktiver Chip wird passend zur effektiven Anzeige markiert (.is-active)
-*/
-(function(){
+ * Quelle der Wahrheit: Server (status_get / status_set)
+ * Auto-Modus: periodisches Polling (PBX → UI)
+ */
+(function () {
   const root = document.getElementById('crmUserBox');
   if (!root) return;
 
   const btn = root.querySelector('#crmUserBtn');
   const msg = root.querySelector('#crmUserStatusMsg');
 
-  const fetchJsonSafe = async (url, opts) => {
-    const r = await fetch(url, opts);
-    const txt = await r.text();
-    try { return JSON.parse(txt); }
-    catch(e) { return { ok:false, error:'non_json', http_status:r.status, raw:txt }; }
-  };
+  /* -------------------------------------------------
+     Polling-Config (vorerst hardcoded)
+     ------------------------------------------------- */
+  const AUTO_POLL_INTERVAL_MS = 4000;
+  let pollTimer = null;
 
-  const apiGet = async () => {
-    return fetchJsonSafe('/api/user/api_user_status_set.php', {
-      method: 'GET',
-      credentials: 'same-origin'
-    });
-  };
+  const apiGet = async () =>
+    fetch('/api/login/status_get.php', { credentials: 'same-origin' })
+      .then(r => r.json());
 
-  const apiSet = async (manual_state) => {
-    return fetchJsonSafe('/api/user/api_user_status_set.php', {
+  const apiSet = async (manual_state) =>
+    fetch('/api/login/status_set.php', {
       method: 'POST',
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ manual_state })
-    });
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'manual_state=' + encodeURIComponent(manual_state)
+    }).then(r => r.json());
+
+  const startAutoPoll = () => {
+    if (pollTimer) return;
+    pollTimer = setInterval(() => {
+      apiGet().then(j => {
+        if (j?.ok) applyUI(j.row, j.effective_state);
+      });
+    }, AUTO_POLL_INTERVAL_MS);
   };
 
-  const effectiveState = (manual, pbxBusy) => {
-    if (manual === 'away' || manual === 'off') return 'away';
-    if (manual === 'busy' || pbxBusy) return 'busy';
-    return 'online';
+  const stopAutoPoll = () => {
+    if (!pollTimer) return;
+    clearInterval(pollTimer);
+    pollTimer = null;
   };
 
-  const applyDot = (manual, pbxBusy) => {
+  const applyUI = (row, effective) => {
     if (!btn) return;
 
-    btn.classList.remove('userbtn--state-online','userbtn--state-busy','userbtn--state-away','userbtn--state-off');
+    /* Dot */
+    btn.classList.remove(
+      'userbtn--state-online',
+      'userbtn--state-busy',
+      'userbtn--state-away',
+      'userbtn--state-off'
+    );
+    btn.classList.add('userbtn--state-' + effective);
 
-    const eff = effectiveState(manual, pbxBusy);
-    if (eff === 'away')  { btn.classList.add(manual === 'off' ? 'userbtn--state-off' : 'userbtn--state-away'); return; }
-    if (eff === 'busy')  { btn.classList.add('userbtn--state-busy'); return; }
-    btn.classList.add('userbtn--state-online');
-  };
+    /* Chips reset */
+    root.querySelectorAll('[data-userstatus-set]')
+      .forEach(el => el.classList.remove('is-active'));
 
-  const applyActiveChip = (manual, pbxBusy) => {
-    const row = root.querySelector('.userstatus__row');
-    if (!row) return;
-
-    row.querySelectorAll('[data-userstatus-set]').forEach(el => el.classList.remove('is-active'));
-
-    const eff = effectiveState(manual, pbxBusy); // online|busy|away
-    const el = row.querySelector(`[data-userstatus-set="${eff}"]`);
-    if (el) el.classList.add('is-active');
-  };
-
-  const applyAll = (manual, pbxBusy) => {
-    applyDot(manual, pbxBusy);
-    applyActiveChip(manual, pbxBusy);
-  };
-
-  // initial
-  apiGet().then(j => {
-    if (j && j.ok) applyAll(j.manual_state, !!j.pbx_busy);
-  }).catch(()=>{});
-
-// set
-root.querySelectorAll('[data-userstatus-set]').forEach(el => {
-  el.addEventListener('click', async () => {
-    const v = String(el.getAttribute('data-userstatus-set') || '').trim();
-    if (!v) return;
-
-    if (msg) msg.textContent = '';
-    try {
-      const j = await apiSet(v);
-      if (j && j.ok) {
-        applyAll(j.manual_state, !!j.pbx_busy);
-        if (msg) msg.textContent = 'Gespeichert.';
-        return;
-      }
-      if (msg) msg.textContent = 'Fehler: ' + (j?.error || 'unknown');
-    } catch(e) {
-      if (msg) msg.textContent = 'Fehler beim Speichern.';
+    /* Active chip + Polling-Steuerung */
+    if (row.manual_state === 'auto') {
+      root.querySelector('[data-userstatus-set="auto"]')
+        ?.classList.add('is-active');
+      startAutoPoll();
+    } else {
+      root.querySelector(`[data-userstatus-set="${row.manual_state}"]`)
+        ?.classList.add('is-active');
+      stopAutoPoll();
     }
+  };
+
+  /* Initial load */
+  apiGet().then(j => {
+    if (j?.ok) applyUI(j.row, j.effective_state);
   });
-})
+
+  /* Click handler */
+  root.querySelectorAll('[data-userstatus-set]').forEach(el => {
+    el.addEventListener('click', async () => {
+      const state = el.getAttribute('data-userstatus-set');
+      if (!state) return;
+
+      if (msg) msg.textContent = '';
+
+      try {
+        const j = await apiSet(state);
+        if (j?.ok) {
+          applyUI(j.row, j.effective_state);
+          if (msg) msg.textContent = 'Gespeichert.';
+        } else {
+          if (msg) msg.textContent = 'Fehler';
+        }
+      } catch {
+        if (msg) msg.textContent = 'Fehler';
+      }
+    });
+  });
 })();

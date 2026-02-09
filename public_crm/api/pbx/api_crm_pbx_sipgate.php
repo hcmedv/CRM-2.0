@@ -2,359 +2,436 @@
 declare(strict_types=1);
 
 /*
- * Datei: /public_crm/api/pbx/api_crm_pbx_sipgate.php
- *
- * Zweck:
- * - Webhook/Forward-Endpoint für Sipgate PBX Events (HTTP)
- * - Normalisiert Payload -> $pbx_event (snake_case) und ruft PBX Processor auf:
- *     CRM_ROOT . '/pbx/crm_process_pbx.php'  (Funktion: PBX_Process(array $pbx_event): array)
- *
- * Security:
- * - Optionaler Shared-Token aus settings_pbx.php:
- *     CRM_MOD_CFG('pbx','webhook.token','')
- *   Wenn gesetzt, muss der Token geliefert werden über:
- *   - Header:  X-CRM-Token: <token>
- *   - ODER Query: ?token=<token>
- *   - ODER Authorization: Bearer <token>
- *
- * Hinweis:
- * - raw_store.enabled ist NUR Debug/Replay/Statistik (Kopie), kein Verarbeitungs-An/Aus.
- */
+  Datei: /public_crm/api/pbx/api_crm_pbx_sipgate.php
+  (ALT: /public/api/system/api_pbx_sipgate.php)
 
+  Zweck:
+  - Nimmt Sipgate Webhook Events entgegen (POST)
+  - Schreibt RAW append-only nach /data/pbx/events_raw.jsonl
+  - Pflegt Call-State nach /data/pbx/calls_state.json
+  - Triggert PBX-Processing (PBX -> Writer) via PBX_Process() (include-only)
+  - Antwort:
+      - newCall => XML subscribe
+      - sonst   => JSON ok
 
+  WICHTIG:
+  - Dieser Webhook macht KEIN Enrichment/KEINE UI-Logik.
+*/
+
+define('LOG_CHANNEL', 'sipgate_webhook');
 
 require_once __DIR__ . '/../../_inc/bootstrap.php';
 
-header('Content-Type: application/json; charset=utf-8');
-header('Cache-Control: no-store');
-header('X-Content-Type-Options: nosniff');
+/* ------------------------------------------------------------
+ * Minimal Defaults (CFG() existiert hier nicht mehr)
+ * ------------------------------------------------------------ */
+$PROJECT_ROOT = defined('CRM_ROOT') ? dirname(CRM_ROOT) : dirname(__DIR__, 3); // Fallback
 
-$MOD = 'pbx';
+$pbxDir     = $PROJECT_ROOT . '/data/pbx';
+$outFile    = $pbxDir . '/events_raw.jsonl';
+$callsFile  = $pbxDir . '/calls_state.json';
+$logFile    = $pbxDir . '/webhook.log';
+$maxCalls   = 2000;
 
-function PBX_RESP(array $payload, int $code = 200): void
+$webhookSelfUrl = 'https://crm.hcmedv.de/api/pbx/api_crm_pbx_sipgate.php';
+
+// Processor im CRM V2
+$processScript = CRM_ROOT . '/pbx/crm_process_pbx.php';
+
+/* ------------------------------------------------------------
+ * Helpers
+ * ------------------------------------------------------------ */
+function FN_EnsureDirForFile(string $path): void
 {
-    http_response_code($code);
-    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    exit;
+    $dir = dirname($path);
+    if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
 }
 
-function PBX_STR($v): string
+function FN_Log(string $file, string $msg): void
 {
-    return trim((string)($v ?? ''));
+    if ($file === '') { return; }
+    FN_EnsureDirForFile($file);
+    @file_put_contents($file, date('Y-m-d H:i:s') . ' ' . $msg . PHP_EOL, FILE_APPEND);
 }
 
-function PBX_NormLower(string $s): string
+function FN_AppendJsonl(string $file, array $row): bool
 {
-    return strtolower(trim($s));
+    if ($file === '') { return false; }
+    FN_EnsureDirForFile($file);
+
+    $json = json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (!is_string($json)) { return false; }
+
+    $fp = @fopen($file, 'ab');
+    if ($fp === false) { return false; }
+    if (!flock($fp, LOCK_EX)) { fclose($fp); return false; }
+
+    $ok = (fwrite($fp, $json . PHP_EOL) !== false);
+
+    flock($fp, LOCK_UN);
+    fclose($fp);
+    return $ok;
 }
 
-function PBX_ReadBearerToken(): string
+function FN_ReadJsonFile(string $file): array
 {
-    $h = (string)($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
-    $h = trim($h);
-    if ($h === '') { return ''; }
-    if (stripos($h, 'bearer ') === 0) { return trim(substr($h, 7)); }
-    return '';
+    if ($file === '' || !is_file($file)) { return []; }
+    $raw = @file_get_contents($file);
+    if (!is_string($raw) || $raw === '') { return []; }
+
+    $j = json_decode($raw, true);
+    return is_array($j) ? $j : [];
 }
 
-function PBX_CheckToken(): void
+function FN_WriteJsonFileAtomic(string $file, array $data): bool
 {
-    $cfg = (array)CRM_MOD_CFG('pbx', 'webhook', []);
-    $required = PBX_STR($cfg['token'] ?? '');
-    if ($required === '') { return; }
+    if ($file === '') { return false; }
+    FN_EnsureDirForFile($file);
 
-    $got = '';
-    if (isset($_SERVER['HTTP_X_CRM_TOKEN'])) { $got = PBX_STR($_SERVER['HTTP_X_CRM_TOKEN']); }
-    if ($got === '' && isset($_GET['token'])) { $got = PBX_STR($_GET['token']); }
-    if ($got === '') { $got = PBX_ReadBearerToken(); }
+    $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (!is_string($json)) { return false; }
 
-    if (!hash_equals($required, $got)) {
-        PBX_RESP(['ok' => false, 'error' => 'unauthorized'], 401);
+    $tmp = $file . '.tmp.' . bin2hex(random_bytes(6));
+
+    if (@file_put_contents($tmp, $json, LOCK_EX) === false) {
+        @unlink($tmp);
+        return false;
     }
-}
 
-function PBX_ReadInput(): array
-{
-    $raw = (string)file_get_contents('php://input');
-    if (trim($raw) !== '') {
-        $j = json_decode($raw, true);
-        if (is_array($j)) { return $j; }
-        return ['_raw' => $raw];
+    if (!@rename($tmp, $file)) {
+        @unlink($tmp);
+        return false;
     }
 
-    if (!empty($_POST)) { return (array)$_POST; }
-    return [];
+    return true;
 }
 
-function PBX_ToEpoch($v): ?int
-{
-    if ($v === null) { return null; }
-    if (is_int($v)) { return ($v > 0) ? $v : null; }
-    if (is_float($v)) { $i = (int)floor($v); return ($i > 0) ? $i : null; }
-
-    $s = PBX_STR($v);
-    if ($s === '') { return null; }
-
-    if (ctype_digit($s)) {
-        $i = (int)$s;
-        return ($i > 0) ? $i : null;
-    }
-
-    try {
-        $dt = new DateTimeImmutable($s);
-        return $dt->getTimestamp();
-    } catch (Throwable $e) {
-        return null;
-    }
-}
-
-function PBX_IsoNowLocal(): string
+function FN_IsoNow(): string
 {
     return (new DateTimeImmutable('now'))->format(DateTimeInterface::ATOM);
 }
 
-function PBX_NormalizeSipgateEvent(array $in): array
+function FN_IsoToTs(?string $iso): int
 {
-    $provider = PBX_STR($in['provider'] ?? 'sipgate');
-    $callId   = PBX_STR($in['call_id'] ?? ($in['callId'] ?? ($in['id'] ?? '')));
-    $from     = PBX_STR($in['from'] ?? ($in['source'] ?? ''));
-    $to       = PBX_STR($in['to'] ?? ($in['target'] ?? ''));
-    $dir      = PBX_STR($in['direction'] ?? ($in['dir'] ?? ''));
-    $state    = PBX_STR($in['state'] ?? ($in['event'] ?? ''));
+    $iso = trim((string)$iso);
+    if ($iso === '') { return 0; }
+    $t = strtotime($iso);
+    return ($t === false) ? 0 : (int)$t;
+}
 
-    $receivedAt = PBX_STR($in['received_at'] ?? ($in['receivedAt'] ?? ($in['timestamp'] ?? '')));
-    if ($receivedAt === '') { $receivedAt = PBX_IsoNowLocal(); }
+function FN_NormalizeState(string $s): string
+{
+    $s = strtolower(trim((string)$s));
+    if ($s === '') { return ''; }
+    if (in_array($s, ['newcall','new_call','new-call'], true)) { return 'newcall'; }
+    if (in_array($s, ['answer','answered'], true)) { return 'answer'; }
+    if (in_array($s, ['hangup','hang_up','hang-up','ended','end'], true)) { return 'hangup'; }
+    $s = preg_replace('/[^a-z0-9_\-]+/', '', $s) ?? '';
+    return $s;
+}
 
-    $timing = [];
-    if (isset($in['timing']) && is_array($in['timing'])) { $timing = $in['timing']; }
+function FN_MapSipgateEventToState(string $ev): string
+{
+    $ev = strtolower(trim((string)$ev));
+    if ($ev === '') { return ''; }
+    if ($ev === 'newcall') { return 'newcall'; }
+    if ($ev === 'answer' || $ev === 'answered') { return 'answer'; }
+    if ($ev === 'hangup') { return 'hangup'; }
+    return FN_NormalizeState($ev);
+}
 
-    $startedAt = PBX_ToEpoch($timing['started_at'] ?? ($in['started_at'] ?? null));
-    $endedAt   = PBX_ToEpoch($timing['ended_at'] ?? ($in['ended_at'] ?? null));
+function FN_NormalizeSipgate(array $p): array
+{
+    $event = (string)($p['event'] ?? 'unknown');
 
-    if ($startedAt === null) { $startedAt = PBX_ToEpoch($in['start_date'] ?? ($in['startDate'] ?? null)); }
-    if ($endedAt === null)   { $endedAt   = PBX_ToEpoch($in['end_date'] ?? ($in['endDate'] ?? null)); }
+    return [
+        'received_at'      => FN_IsoNow(),
+        'source_ip'        => (string)($_SERVER['REMOTE_ADDR'] ?? ''),
+        'provider'         => 'sipgate',
 
-    $duration = null;
-    if ($startedAt !== null && $endedAt !== null && $endedAt > $startedAt) { $duration = $endedAt - $startedAt; }
+        'event'            => $event,
+        'state'            => FN_MapSipgateEventToState($event),
 
-    $pbx_event = [
-        'provider'     => $provider !== '' ? $provider : 'sipgate',
-        'call_id'      => $callId,
-        'from'         => $from,
-        'to'           => $to,
-        'direction'    => PBX_NormLower($dir),
-        'state'        => PBX_NormLower($state),
-        'received_at'  => $receivedAt,
+        'callId'           => (string)($p['callId'] ?? ''),
+        'origCallId'       => (string)($p['origCallId'] ?? ''),
+
+        'from'             => (string)($p['from'] ?? ''),
+        'to'               => (string)($p['to'] ?? ''),
+        'direction'        => (string)($p['direction'] ?? ''),
+        'diversion'        => (string)($p['diversion'] ?? ''),
+
+        'user'             => $p['user'] ?? ($p['user[]'] ?? null),
+        'userId'           => $p['userId'] ?? ($p['userId[]'] ?? null),
+        'fullUserId'       => $p['fullUserId'] ?? ($p['fullUserId[]'] ?? null),
+
+        'answeringNumber'  => (string)($p['answeringNumber'] ?? ''),
+        'cause'            => (string)($p['cause'] ?? ''),
+
+        'raw'              => $p
     ];
-
-    $pbx_event['timing'] = [];
-    if ($startedAt !== null) { $pbx_event['timing']['started_at'] = $startedAt; }
-    if ($endedAt !== null)   { $pbx_event['timing']['ended_at']   = $endedAt; }
-    if ($duration !== null)  { $pbx_event['timing']['duration_sec'] = $duration; }
-
-    return $pbx_event;
 }
 
-/* ---------------- RAW Store (Debug-Kopie) ---------------- */
-
-function PBX_RawEnsureDir(string $dir): bool
+function FN_PruneCallState(array $calls, int $maxCalls): array
 {
-    if ($dir === '') { return false; }
-    if (is_dir($dir)) { return true; }
-    @mkdir($dir, 0775, true);
-    return is_dir($dir);
-}
+    if ($maxCalls <= 0) { return []; }
+    if (count($calls) <= $maxCalls) { return $calls; }
 
-function PBX_RawRotateIfTooLarge(string $file, int $maxBytes): void
-{
-    if ($maxBytes <= 0) { return; }
-    if (!is_file($file)) { return; }
+    $items = [];
+    foreach ($calls as $callId => $row) {
+        if (!is_array($row)) { continue; }
 
-    $sz = @filesize($file);
-    if (!is_int($sz) || $sz <= $maxBytes) { return; }
+        $ts = '';
+        if (isset($row['ts_hangup']) && is_string($row['ts_hangup']) && ($row['ts_hangup'] !== '')) { $ts = $row['ts_hangup']; }
+        elseif (isset($row['ts_answer']) && is_string($row['ts_answer']) && ($row['ts_answer'] !== '')) { $ts = $row['ts_answer']; }
+        elseif (isset($row['ts_newcall']) && is_string($row['ts_newcall']) && ($row['ts_newcall'] !== '')) { $ts = $row['ts_newcall']; }
+        else { $ts = '1970-01-01T00:00:00+00:00'; }
 
-    $rot = $file . '.rot.' . date('Ymd_His');
-    @rename($file, $rot);
-}
+        $t = strtotime($ts);
+        if ($t === false) { $t = 0; }
 
-function PBX_RawAppendLocked(string $file, string $line): bool
-{
-    $fp = @fopen($file, 'ab');
-    if ($fp === false) { return false; }
-
-    try {
-        @flock($fp, LOCK_EX);
-        @fwrite($fp, $line);
-        @fflush($fp);
-        @flock($fp, LOCK_UN);
-    } finally {
-        @fclose($fp);
-    }
-
-    @chmod($file, 0664);
-    return true;
-}
-
-function PBX_RawStoreWrite(string $mod, array $pbx_event, array $in): array
-{
-    $rawStore = (array)CRM_MOD_CFG($mod, 'raw_store', []);
-    if (($rawStore['enabled'] ?? false) !== true) {
-        return [
-            'enabled' => false,
-            'written' => false,
-            'reason'  => 'raw_store_disabled',
-            'file'    => null,
+        $items[] = [
+            'callId' => (string)$callId,
+            't'      => (int)$t,
+            'row'    => $row
         ];
     }
 
-    $dataBaseDir = (string)CRM_MOD_PATH($mod, 'data'); // => .../data/pbx
-    if (trim($dataBaseDir) === '') {
+    usort($items, function ($a, $b) {
+        if ($a['t'] === $b['t']) { return 0; }
+        return ($a['t'] > $b['t']) ? -1 : 1;
+    });
+
+    $keep = array_slice($items, 0, $maxCalls);
+    $out  = [];
+
+    foreach ($keep as $it) {
+        $out[$it['callId']] = $it['row'];
+    }
+
+    return $out;
+}
+
+function FN_UpdateCallState(string $callsFile, array $norm, int $maxCalls): array
+{
+    $callId = (string)($norm['callId'] ?? '');
+    if ($callId === '') {
         return [
-            'enabled' => true,
-            'written' => false,
-            'reason'  => 'data_path_missing',
-            'file'    => null,
+            'callId' => '',
+            'state' => (string)($norm['state'] ?? ''),
+            'hangup_without_start' => false,
+            'startedIso' => null,
+            'endedIso' => null,
+            'durationSec' => null
         ];
     }
 
-    $subDir   = trim((string)($rawStore['data_dir'] ?? ''), '/'); // meistens ''
-    $fileName = trim((string)($rawStore['filename_current'] ?? 'pbx_raw_current.jsonl'));
-    $mode     = strtolower(trim((string)($rawStore['mode'] ?? 'jsonl')));
+    $calls = FN_ReadJsonFile($callsFile);
 
-    if ($fileName === '') { $fileName = 'pbx_raw_current.jsonl'; }
-    if ($mode !== 'json' && $mode !== 'jsonl') { $mode = 'jsonl'; }
+    $now   = (string)($norm['received_at'] ?? FN_IsoNow());
+    $state = (string)($norm['state'] ?? '');
 
-    $file =
-        rtrim($dataBaseDir, '/')
-        . '/'
-        . ($subDir !== '' ? $subDir . '/' : '')
-        . $fileName;
-
-    // Ensure dir exists
-    $dir = dirname($file);
-    if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
-    if (!is_dir($dir)) {
-        return [
-            'enabled' => true,
-            'written' => false,
-            'reason'  => 'mkdir_failed',
-            'file'    => $file,
+    if (!isset($calls[$callId]) || !is_array($calls[$callId])) {
+        $calls[$callId] = [
+            'callId'          => $callId,
+            'from'            => (string)($norm['from'] ?? ''),
+            'to'              => (string)($norm['to'] ?? ''),
+            'direction'       => (string)($norm['direction'] ?? ''),
+            'ts_newcall'      => null,
+            'ts_answer'       => null,
+            'ts_hangup'       => null,
+            'duration_sec'    => null,
+            'cause'           => '',
+            'answeringNumber' => '',
+            'last_state'      => ''
         ];
     }
 
-    // Rotation (optional)
-    $maxBytes = (int)($rawStore['max_bytes'] ?? 0);
-    if ($maxBytes > 0 && is_file($file)) {
-        $sz = @filesize($file);
-        if (is_int($sz) && $sz > $maxBytes) {
-            $rot = $file . '.rot.' . date('Ymd_His');
-            @rename($file, $rot);
+    $hangupWithoutStart = false;
+
+    if ($state === 'newcall') {
+        if ($calls[$callId]['ts_newcall'] === null) { $calls[$callId]['ts_newcall'] = $now; }
+
+    } elseif ($state === 'answer') {
+
+        if ($calls[$callId]['ts_answer'] === null) { $calls[$callId]['ts_answer'] = $now; }
+        if ((string)($norm['answeringNumber'] ?? '') !== '') { $calls[$callId]['answeringNumber'] = (string)$norm['answeringNumber']; }
+
+    } elseif ($state === 'hangup') {
+
+        if ($calls[$callId]['ts_hangup'] === null) {
+
+            $calls[$callId]['ts_hangup'] = $now;
+
+            $hasStart = false;
+            if (is_string($calls[$callId]['ts_answer'] ?? null) && (string)$calls[$callId]['ts_answer'] !== '') { $hasStart = true; }
+            if (is_string($calls[$callId]['ts_newcall'] ?? null) && (string)$calls[$callId]['ts_newcall'] !== '') { $hasStart = true; }
+            if (!$hasStart) { $hangupWithoutStart = true; }
+        }
+
+        if ((string)($norm['cause'] ?? '') !== '') { $calls[$callId]['cause'] = (string)$norm['cause']; }
+        if ((string)($norm['answeringNumber'] ?? '') !== '') { $calls[$callId]['answeringNumber'] = (string)$norm['answeringNumber']; }
+
+        $tsStart = $calls[$callId]['ts_answer'] ?? null;
+        if ($tsStart === null) { $tsStart = $calls[$callId]['ts_newcall'] ?? null; }
+
+        if (is_string($tsStart) && $tsStart !== '') {
+            $t0 = strtotime($tsStart);
+            $t1 = strtotime($now);
+            if (($t0 !== false) && ($t1 !== false) && ($t1 >= $t0)) {
+                $calls[$callId]['duration_sec'] = (int)($t1 - $t0);
+            }
         }
     }
 
-    $debug = (bool)CRM_MOD_CFG($mod, 'debug', false);
+    $calls[$callId]['last_state'] = $state;
 
-    $row = [
-        'ts'        => (new DateTimeImmutable('now'))->format(DateTimeInterface::ATOM),
-        'remote_ip' => (string)($_SERVER['REMOTE_ADDR'] ?? ''),
-        'pbx_event' => $pbx_event,
-    ];
-    if ($debug) { $row['in'] = $in; }
+    $calls = FN_PruneCallState($calls, $maxCalls);
+    FN_WriteJsonFileAtomic($callsFile, $calls);
 
-    $flags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
-    if ($mode === 'json') { $flags |= JSON_PRETTY_PRINT; }
+    $startedIso = null;
+    $endedIso = null;
+    $durationSec = null;
 
-    $line = json_encode($row, $flags);
-    if (!is_string($line) || $line === '') {
-        return [
-            'enabled' => true,
-            'written' => false,
-            'reason'  => 'json_encode_failed',
-            'file'    => $file,
-            'mode'    => $mode,
-        ];
+    $row = $calls[$callId] ?? null;
+    if (is_array($row)) {
+
+        $startedIso = (string)($row['ts_answer'] ?? '');
+        if ($startedIso === '') { $startedIso = (string)($row['ts_newcall'] ?? ''); }
+        if ($startedIso === '') { $startedIso = null; }
+
+        $endedIso = (string)($row['ts_hangup'] ?? '');
+        if ($endedIso === '') { $endedIso = null; }
+
+        $durationSec = isset($row['duration_sec']) ? (int)$row['duration_sec'] : null;
     }
-    $line .= "\n";
-
-    // Append (mit Lock)
-    $fp = @fopen($file, 'ab');
-    if ($fp === false) {
-        return [
-            'enabled' => true,
-            'written' => false,
-            'reason'  => 'fopen_failed',
-            'file'    => $file,
-            'mode'    => $mode,
-        ];
-    }
-
-    $ok = false;
-    try {
-        @flock($fp, LOCK_EX);
-        $w = @fwrite($fp, $line);
-        @fflush($fp);
-        @flock($fp, LOCK_UN);
-        $ok = (is_int($w) && $w > 0);
-    } finally {
-        @fclose($fp);
-    }
-
-    if ($ok) { @chmod($file, 0664); }
 
     return [
-        'enabled' => true,
-        'written' => $ok,
-        'reason'  => $ok ? 'ok' : 'write_failed',
-        'file'    => $file,
-        'mode'    => $mode,
+        'callId' => $callId,
+        'state' => $state,
+        'hangup_without_start' => (bool)$hangupWithoutStart,
+        'startedIso' => $startedIso,
+        'endedIso' => $endedIso,
+        'durationSec' => $durationSec
     ];
 }
 
-
-
-
-/* ---------------- main ---------------- */
-
-PBX_CheckToken();
-
-$in = PBX_ReadInput();
-$pbx_event = PBX_NormalizeSipgateEvent($in);
-
-if (PBX_STR($pbx_event['call_id'] ?? '') === '' || PBX_STR($pbx_event['state'] ?? '') === '') {
-    PBX_RESP(['ok' => false, 'error' => 'bad_request', 'message' => 'call_id/state required'], 400);
+function FN_OutputJson(array $data, int $code = 200): void
+{
+    http_response_code($code);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
 
-// Debug-Kopie (schaltet Verarbeitung NICHT ab)
-$rawInfo = PBX_RawStoreWrite('pbx', $pbx_event, $in);
+function FN_OutputSipgateXmlSubscribe(string $urlAnswer, string $urlHangup): void
+{
+    http_response_code(200);
+    header('Content-Type: application/xml; charset=utf-8');
 
-// Processor laden
-$processor = CRM_ROOT . '/pbx/crm_process_pbx.php';
-if (!is_file($processor)) {
-    PBX_RESP(['ok' => false, 'error' => 'server_error', 'message' => 'processor_missing', 'raw_store' => $rawInfo], 500);
+    echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
+    echo '<Response onAnswer="' . htmlspecialchars($urlAnswer, ENT_QUOTES, 'UTF-8') . '" onHangup="' . htmlspecialchars($urlHangup, ENT_QUOTES, 'UTF-8') . '" />' . "\n";
 }
 
-require_once $processor;
-
-if (!function_exists('PBX_Process')) {
-    PBX_RESP(['ok' => false, 'error' => 'server_error', 'message' => 'PBX_Process missing', 'raw_store' => $rawInfo], 500);
+/* ------------------------------------------------------------
+ * 1) POST lesen
+ * ------------------------------------------------------------ */
+$payload = $_POST;
+if (!is_array($payload) || !$payload) {
+    $raw = file_get_contents('php://input');
+    $j = json_decode((string)$raw, true);
+    $payload = is_array($j) ? $j : ['_raw' => (string)$raw];
 }
 
-try {
-    $r = PBX_Process($pbx_event);
-    if (!is_array($r)) {
-        PBX_RESP(['ok' => false, 'error' => 'process_failed', 'message' => 'invalid_process_response', 'raw_store' => $rawInfo], 500);
+/* ------------------------------------------------------------
+ * 2) Normalisieren
+ * ------------------------------------------------------------ */
+$norm = FN_NormalizeSipgate($payload);
+
+if (($norm['event'] === 'unknown') || ((string)$norm['callId'] === '')) {
+    FN_Log($logFile, 'WARN invalid payload: ' . json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+}
+
+/* ------------------------------------------------------------
+ * 3) RAW JSONL append
+ * ------------------------------------------------------------ */
+if (!FN_AppendJsonl($outFile, $norm)) {
+    FN_Log($logFile, 'ERROR write_failed event=' . (string)$norm['event'] . ' callId=' . (string)$norm['callId']);
+    FN_OutputJson(['ok' => false, 'error' => 'write_failed'], 500);
+    exit;
+}
+
+/* ------------------------------------------------------------
+ * 4) Call-State aktualisieren
+ * ------------------------------------------------------------ */
+$stateInfo = FN_UpdateCallState($callsFile, $norm, $maxCalls);
+
+FN_Log(
+    $logFile,
+    'OK event=' . (string)$norm['event'] .
+    ' state=' . (string)$norm['state'] .
+    ' callId=' . (string)$norm['callId'] .
+    ' from=' . (string)$norm['from'] .
+    ' to=' . (string)$norm['to'] .
+    (((string)$norm['answeringNumber'] !== '') ? ' answeringNumber=' . (string)$norm['answeringNumber'] : '') .
+    (((string)$norm['cause'] !== '') ? ' cause=' . (string)$norm['cause'] : '') .
+    ($stateInfo['hangup_without_start'] ? ' hangup_without_start=1' : '')
+);
+
+/* ------------------------------------------------------------
+ * 5) PBX Processing -> Writer
+ * ------------------------------------------------------------ */
+if (is_file($processScript)) {
+
+    require_once $processScript;
+
+    if (function_exists('PBX_Process')) {
+
+        $pbxEvent = [
+            'provider'    => 'sipgate',
+            'call_id'     => (string)$norm['callId'],
+            'from'        => (string)$norm['from'],
+            'to'          => (string)$norm['to'],
+            'direction'   => (string)$norm['direction'],
+            'state'       => (string)$norm['state'],
+            'received_at' => (string)$norm['received_at'],
+
+            'timing' => [
+                'started_at' => FN_IsoToTs($stateInfo['startedIso'] ?? null),
+                'ended_at'   => ($stateInfo['endedIso'] ?? null) ? FN_IsoToTs((string)$stateInfo['endedIso']) : null,
+            ],
+        ];
+
+        try {
+
+            $res = PBX_Process($pbxEvent);
+
+            if (empty($res['ok'])) {
+                FN_Log($logFile, 'ERROR pbx_process failed: ' . json_encode($res, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            } else {
+                FN_Log($logFile, 'PBX->Writer ok event_id=' . (string)($res['event_id'] ?? '') . ' is_new=' . (string)($res['is_new'] ?? ''));
+            }
+
+        } catch (Throwable $e) {
+
+            FN_Log($logFile, 'ERROR pbx_process exception: ' . $e->getMessage());
+        }
+
+    } else {
+
+        FN_Log($logFile, 'WARN pbx_process loaded but PBX_Process() missing');
     }
-    if (($r['ok'] ?? false) !== true) {
-        PBX_RESP(['ok' => false, 'error' => 'process_failed', 'ctx' => $r, 'raw_store' => $rawInfo], 500);
-    }
-
-    PBX_RESP([
-        'ok'        => true,
-        'processed' => true,
-        'writer'    => $r['writer'] ?? null,
-        'event_id'  => $r['event_id'] ?? null,
-        'raw_store' => $rawInfo,
-    ]);
-} catch (Throwable $e) {
-    PBX_RESP(['ok' => false, 'error' => 'exception', 'message' => $e->getMessage(), 'raw_store' => $rawInfo], 500);
+} else {
+    FN_Log($logFile, 'WARN pbx_process script missing: ' . $processScript);
 }
+
+/* ------------------------------------------------------------
+ * 6) Antwort newCall => XML subscribe
+ * ------------------------------------------------------------ */
+if ((string)$norm['state'] === 'newcall') {
+    FN_OutputSipgateXmlSubscribe($webhookSelfUrl, $webhookSelfUrl);
+    exit;
+}
+
+/* ------------------------------------------------------------
+ * 7) sonst JSON OK
+ * ------------------------------------------------------------ */
+FN_OutputJson(['ok' => true]);

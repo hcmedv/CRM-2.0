@@ -9,8 +9,8 @@
    Flyout – feste Breite
    ------------------------------------------------- */
 .userfly{
-  min-width:300px;
-  width:300px;
+  min-width:355px;
+  width:350px;
 }
 
 /* -------------------------------------------------
@@ -102,3 +102,48 @@
   text-overflow:ellipsis;
   min-height:1.2em;          /* fix */
 }
+
+/* -------------------------------------------------
+   User Status – Auto Chip
+   ------------------------------------------------- */
+.chip--auto{
+  border-color: rgba(0,0,0,.18);
+  background: linear-gradient(180deg, #f4f6f9, #e9edf3);
+  color: #3b4a6b;
+  position: relative;
+}
+
+/* kleines „A“-Icon / Kreis */
+.chip--auto::before{
+  content: "A";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  background: #6b7cff;
+  color: #fff;
+}
+
+/* Active State */
+.chip--auto.is-active{
+  background: linear-gradient(180deg, #6b7cff, #5566e6);
+  border-color: #5566e6;
+  color: #fff;
+}
+
+.chip--auto.is-active::before{
+  background: #fff;
+  color: #5566e6;
+}
+
+/* Hover */
+.chip--auto:hover{
+  filter: brightness(0.97);
+}
+
+

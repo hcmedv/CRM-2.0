@@ -328,6 +328,9 @@ function FN_H(string $s) : string
     'poll_ms' => (int)($SVC_STATUS['poll_ms'] ?? 10000),
     'texts'   => (array)($SVC_STATUS['texts'] ?? []),
     'office'  => (array)($SVC_STATUS['office_hours'] ?? []),
+
+    // NEU: innerhalb Office-Hours: state "off" zu z.B. "away" mappen
+    'office_off_maps_to' => (string)($SVC_STATUS['office_hours_off_maps_to'] ?? 'away'),
   ], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); ?>;
   /* ===============================================================================================
      END: CONFIG
@@ -378,7 +381,18 @@ function FN_H(string $s) : string
     if (!dot) return;
 
     state = normalize(state);
-    if (!isWithinOfficeHours()) state = 'off';
+
+    const inOffice = isWithinOfficeHours();
+
+    // außerhalb Office-Hours immer "off"
+    if (!inOffice) {
+      state = 'off';
+    } else {
+      // innerhalb Office-Hours: CRM "off" => z.B. "away"
+      if (state === 'off') {
+        state = normalize(CFG.office_off_maps_to || 'away');
+      }
+    }
 
     dot.setAttribute('data-state', state);
 
@@ -497,7 +511,7 @@ function FN_H(string $s) : string
 
       if (!r.ok || !j || !j.ok || !j.link) {
         tvSetBusy(false);
-        tvSetMsg('Code ungültig/abgelaufen.\nBitte neuen Code anfordern.', 'error');
+        tvSetMsg("Code ungültig/abgelaufen.\nBitte neuen Code anfordern.", 'error');
         return;
       }
 
@@ -505,12 +519,12 @@ function FN_H(string $s) : string
       window.location.href = String(j.link);
     } catch (e) {
       tvSetBusy(false);
-      tvSetMsg('Fehler beim Verbinden.\nBitte erneut versuchen.', 'error');
+      tvSetMsg("Fehler beim Verbinden.\nBitte erneut versuchen.", 'error');
     }
   });
 
   tvHelp?.addEventListener('click', () => {
-    tvSetMsg('Hinweis: Sie erhalten den Code vom Techniker.\nBei Problemen bitte Kontaktformular nutzen.', 'info');
+    tvSetMsg("Hinweis: Sie erhalten den Code vom Techniker.\nBei Problemen bitte Kontaktformular nutzen.", 'info');
   });
   /* ===============================================================================================
      END: TEAMVIEWER SUPPORT (CODE -> LINK -> REDIRECT)

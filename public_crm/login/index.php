@@ -1,8 +1,27 @@
 <?php
 declare(strict_types=1);
 
+/*
+ * Datei: /public_crm/login/index.php
+ *
+ * Zweck:
+ * - Login-Seite des CRM (Benutzername/Passwort)
+ * - Authentifiziert den Benutzer über CRM_Auth_Login()
+ * - Optionaler 2FA-Redirect (TOTP), falls für den Benutzer aktiviert
+ * - Setzt beim erfolgreichen Login den Benutzerstatus ausschließlich
+ *   über crm_status.php:
+ *     - logged_in    → true
+ *     - manual_state → "online" (nur wenn nicht "auto")
+ *     - updated_at   → aktueller Zeitstempel
+ *
+ * Hinweise:
+ * - Keine direkte JSON-/Dateilogik mehr in dieser Datei
+ * - Status-DB wird ausschließlich über crm_status.php gepflegt
+ */
+
 require_once dirname(__DIR__) . '/_inc/bootstrap.php';
 require_once CRM_ROOT . '/_inc/auth.php';
+require_once CRM_ROOT . '/login/crm_status.php';
 
 if (CRM_Auth_IsLoggedIn()) {
     header('Location: /index.php');
@@ -10,23 +29,42 @@ if (CRM_Auth_IsLoggedIn()) {
 }
 
 $err = '';
+
+/* -------------------------------------------------
+   POST: Login
+   ------------------------------------------------- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $u = trim((string)($_POST['user'] ?? ''));
     $p = (string)($_POST['pass'] ?? '');
+
     if (!CRM_Auth_Login($u, $p)) {
         $err = 'Login fehlgeschlagen';
-
-        
     } else {
 
-        // PoC: wenn User 2FA aktiv hat -> erst totp.php
+        // Status setzen (Single Source of Truth)
+        $row = CRM_Status_GetUser($u);
+
+        $patch = [
+            'logged_in'   => true,
+            'updated_at' => date('c'),
+        ];
+
+        // manual_state nur anfassen, wenn nicht auto
+        if (($row['manual_state'] ?? 'auto') !== 'auto') {
+            $patch['manual_state'] = 'online';
+        }
+
+        CRM_Status_UpdateUser($u, $patch);
+
+        // 2FA prüfen
         $needs2fa = false;
         $data = json_decode((string)@file_get_contents(CRM_LOGIN_FILE), true);
 
         if (is_array($data)) {
-            foreach ($data as $row) {
-                if ((string)($row['user'] ?? '') === $u) {
-                    $needs2fa = (bool)($row['2fa'] ?? false) && ((string)($row['2fa_secret'] ?? '') !== '');
+            foreach ($data as $r) {
+                if ((string)($r['user'] ?? '') === $u) {
+                    $needs2fa = (bool)($r['2fa'] ?? false)
+                        && ((string)($r['2fa_secret'] ?? '') !== '');
                     break;
                 }
             }
@@ -40,18 +78,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: /index.php');
         exit;
     }
-
-
-
-
-
-
-
-
-
-
-
-
 }
 ?><!DOCTYPE html>
 <html lang="de">
@@ -71,7 +97,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     background: #fffbd1;
     outline: none;
   }
-  .login-form input:focus{ border-color: rgba(0,123,255,.55); box-shadow: 0 0 0 3px rgba(0,123,255,.12); }
+  .login-form input:focus{
+    border-color: rgba(0,123,255,.55);
+    box-shadow: 0 0 0 3px rgba(0,123,255,.12);
+  }
   .login-form button{
     font: inherit;
     font-weight: 700;
@@ -105,7 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
   </div>
 
-    <footer class="app-footer">
+  <footer class="app-footer">
     CRM 2.0
   </footer>
 </main>

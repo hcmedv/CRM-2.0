@@ -192,6 +192,9 @@ if ($mod !== '') {
 <body>
 
 <?php if ($isLoggedIn): ?>
+
+
+
 <header class="app-header">
 
   <div class="topnav bar">
@@ -259,6 +262,7 @@ if ($mod !== '') {
                 </div>
 
                 <div class="userstatus__row">
+                  <button class="chip chip--auto" type="button" data-userstatus-set="auto">Auto</button>
                   <button class="chip chip--work" type="button" data-userstatus-set="online">Verfügbar</button>
                   <button class="chip chip--wait" type="button" data-userstatus-set="busy">Beschäftigt</button>
                   <button class="chip chip--closed" type="button" data-userstatus-set="away">Abwesend</button>

@@ -5,7 +5,7 @@ declare(strict_types=1);
   Datei: /public_service/api/status_public.php
   Zweck:
   - Same-Origin Proxy für die Service-Webseite (kein CORS)
-  - Holt PUBLIC Status von dev.hcmedv.de und gibt JSON zurück
+  - Holt PUBLIC Status von crm.hcmedv.de und gibt JSON zurück
   - Kein Login/keine Cookies weiterreichen
   - Liefert effective_state: online|busy|away|off
 */
@@ -14,7 +14,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 
-define('STATUS_REMOTE_URL', 'https://dev.hcmedv.de/api/user/api_user_status_public.php');
+define('STATUS_REMOTE_URL', 'https://crm.hcmedv.de/api/user/api_user_status_public.php');
 define('HTTP_TIMEOUT_SEC', 3);
 
 function FN_JsonOut(int $code, array $payload): void

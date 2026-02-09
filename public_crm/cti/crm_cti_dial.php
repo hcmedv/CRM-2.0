@@ -7,11 +7,17 @@ declare(strict_types=1);
  * Zweck:
  * - Click-to-Dial über Sipgate (v2 API)
  * - Auth via Session
- * - Caller-Gerät via Allowlist einschränken (cti.sipgate.allowed_devices)
+ * - Caller-Gerät automatisch anhand User-Kontext (office|remote) bestimmen:
+ *   - Profil aus $_SESSION (crm_user_context.php)
+ *   - Caller aus /data/login/mitarbeiter.json -> cti.profiles[profile].caller
+ *   - Fallback: cti.default_profile -> profiles[..].caller
+ *   - Fallback: settings cti.sipgate.default_device
+ *   - Optional: Sipgate defaultDevice (wenn aktiviert)
+ * - Allowlist einschränken (cti.sipgate.allowed_devices)
  * - Secrets via CRM_SECRET() (Modul-Secrets: /config/cti/secrets_cti.php)
  *
  * Request:
- * - POST JSON: { "number":"+49...", "caller":"e0"(optional) }
+ * - POST JSON: { "number":"+49...", "caller":"e0"(optional override) }
  *
  * Debug:
  * - Optional GET (nur wenn CRM_DEBUG === true): ?number=...&caller=...
@@ -23,6 +29,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../_inc/bootstrap.php';
 require_once CRM_ROOT . '/_inc/auth.php';
+require_once CRM_ROOT . '/_inc/crm_user_context.php';
 
 CRM_Auth_RequireLoginApi();
 
@@ -43,14 +50,14 @@ function FN_Out(array $j, int $code = 200): void
 function FN_NormalizeE164(string $in): string
 {
     $s = trim($in);
-    if ($s === '') return '';
+    if ($s === '') { return ''; }
 
     $s = preg_replace('/[^\d+]/', '', $s) ?? '';
-    if ($s === '') return '';
+    if ($s === '') { return ''; }
 
-    if ($s[0] === '+') return $s;
-    if (strpos($s, '00') === 0) return '+' . substr($s, 2);
-    if (strpos($s, '0') === 0) return '+49' . ltrim(substr($s, 1), '0');
+    if ($s[0] === '+') { return $s; }
+    if (strpos($s, '00') === 0) { return '+' . substr($s, 2); }
+    if (strpos($s, '0') === 0) { return '+49' . ltrim(substr($s, 1), '0'); }
 
     return '+' . $s;
 }
@@ -72,7 +79,7 @@ function FN_IsDebugEnabled(array $sipgateCfg): bool
  */
 function FN_Log(bool $debug, string $msg, array $ctx = []): void
 {
-    if (!$debug) return;
+    if (!$debug) { return; }
 
     $dir = CRM_BASE . '/log';
     if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
@@ -159,6 +166,61 @@ function FN_SipgateRequest(string $apiBase, string $tokenId, string $tokenSecret
     ];
 }
 
+/*
+ * 0005 - FN_LoadEmployees
+ * Lädt /data/login/mitarbeiter.json (CRM_LOGIN_FILE) robust als Array.
+ */
+function FN_LoadEmployees(): array
+{
+    if (!defined('CRM_LOGIN_FILE')) { return []; }
+
+    $raw = @file_get_contents(CRM_LOGIN_FILE);
+    if ($raw === false || trim($raw) === '') { return []; }
+
+    $j = json_decode($raw, true);
+    return is_array($j) ? $j : [];
+}
+
+/*
+ * 0006 - FN_FindEmployeeByUser
+ * Sucht Mitarbeiter-Row nach user.
+ */
+function FN_FindEmployeeByUser(array $employees, string $userKey): ?array
+{
+    $userKey = trim($userKey);
+    if ($userKey === '') { return null; }
+
+    foreach ($employees as $r) {
+        if (!is_array($r)) { continue; }
+        if ((string)($r['user'] ?? '') === $userKey) { return $r; }
+    }
+    return null;
+}
+
+/*
+ * 0007 - FN_SelectCallerByProfile
+ * Bestimmt den Caller anhand employee.cti.profiles[profile].caller inkl. Fallbacks.
+ */
+function FN_SelectCallerByProfile(?array $emp, string $profile): string
+{
+    if (!is_array($emp)) { return ''; }
+
+    $cti = is_array($emp['cti'] ?? null) ? (array)$emp['cti'] : [];
+    $profiles = is_array($cti['profiles'] ?? null) ? (array)$cti['profiles'] : [];
+
+    $profile = trim($profile);
+    $pRow = (isset($profiles[$profile]) && is_array($profiles[$profile])) ? (array)$profiles[$profile] : [];
+    $caller = trim((string)($pRow['caller'] ?? ''));
+
+    if ($caller !== '') { return $caller; }
+
+    $defProfile = trim((string)($cti['default_profile'] ?? 'remote'));
+    $p2 = (isset($profiles[$defProfile]) && is_array($profiles[$defProfile])) ? (array)$profiles[$defProfile] : [];
+    $caller = trim((string)($p2['caller'] ?? ''));
+
+    return $caller;
+}
+
 /* -------------------- Request -------------------- */
 
 $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
@@ -214,12 +276,38 @@ if ($secretKey === '') { $secretKey = 'sipgate_cti'; }
 $allowed = (array)($sip['allowed_devices'] ?? []);
 $allowed = array_values(array_filter(array_map('strval', $allowed)));
 
-$caller = trim((string)$callerIn);
-if ($caller === '') { $caller = trim((string)($sip['default_device'] ?? '')); }
-
 $useSipgateDefault = (bool)($sip['use_sipgate_default_device'] ?? true);
 
+/* -------------------- Caller (override -> profile -> fallbacks) -------------------- */
+
+$caller = trim((string)$callerIn); // optionaler Override per Request
+
+if ($caller === '') {
+
+    $authUser = (array)CRM_Auth_User();
+    $userKey  = trim((string)($authUser['user'] ?? ''));
+
+    $profile  = CRM_UserContext_EnsureProfile(); // office|remote
+
+    $employees = FN_LoadEmployees();
+    $emp = FN_FindEmployeeByUser($employees, $userKey);
+
+    $caller = FN_SelectCallerByProfile($emp, $profile);
+
+    // Fallback: global default_device (settings)
+    if ($caller === '') {
+        $caller = trim((string)($sip['default_device'] ?? ''));
+    }
+
+    FN_Log($debug, 'caller_selected', [
+        'user'    => $userKey,
+        'profile' => $profile,
+        'caller'  => $caller,
+    ]);
+}
+
 /* -------------------- Secrets -------------------- */
+
 $tokenId     = (string)CRM_SECRET('cti.' . $secretKey . '.token_id', '');
 $tokenSecret = (string)CRM_SECRET('cti.' . $secretKey . '.token_secret', '');
 
@@ -227,7 +315,6 @@ if ($tokenId === '' || $tokenSecret === '') {
     FN_Log($debug, 'dial_reject_missing_secrets', ['secret_key' => $secretKey]);
     FN_Out(['ok' => false, 'error' => 'missing_secrets', 'secret_key' => $secretKey], 500);
 }
-
 
 /* -------------------- Sipgate: /users (defaultDevice) -------------------- */
 
@@ -240,7 +327,7 @@ if (!($users['ok'] ?? false) || !is_array($users['json'])) {
 $defaultDevice = '';
 $items = (array)($users['json']['items'] ?? []);
 foreach ($items as $u) {
-    if (!is_array($u)) continue;
+    if (!is_array($u)) { continue; }
     if (($u['defaultDevice'] ?? '') !== '') { $defaultDevice = (string)$u['defaultDevice']; break; }
 }
 

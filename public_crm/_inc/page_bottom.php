@@ -18,6 +18,8 @@ declare(strict_types=1);
  * - session_profile ist optional; wenn nicht gesetzt -> wird per Whitelist (IP) abgeleitet.
  */
 
+require_once CRM_ROOT . '/_inc/crm_user_context.php';
+
 $appVer = (string)CRM_CFG('app_version', 'dev');
 
 // ---------------- Session-Daten (best-effort) ----------------
@@ -25,13 +27,9 @@ $loginAt = (int)($_SESSION['crm_login_at'] ?? 0);
 $lastAct = (int)($_SESSION['crm_last_activity'] ?? 0);
 
 // Profil: wenn nicht gesetzt, best-effort aus IP Whitelist ableiten (wie im Guard)
-$profile = (string)($_SESSION['session_profile'] ?? '');
-if ($profile === '') {
-    $ip = trim((string)($_SERVER['REMOTE_ADDR'] ?? ''));
-    $wl = (array)CRM_CFG('session_ip_whitelist', []);
-    $wl = array_values(array_filter(array_map('trim', array_map('strval', $wl))));
-    $profile = ($ip !== '' && in_array($ip, $wl, true)) ? 'office' : 'remote';
-}
+
+$profile = CRM_UserContext_EnsureProfile(); // office|remote
+$_SESSION['session_profile'] = $profile;   // optional, falls UI es noch nutzt
 
 // Settings (aus CRM_CFG)
 $idleFallback = (int)CRM_CFG('session_idle_timeout_sec', 0);

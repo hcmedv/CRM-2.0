@@ -360,7 +360,7 @@ if ($ttl > 0) {
 ######## SESSION START ##################################################################################################################
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
-    session_name('CRMSESSID');
+    session_name('CRMSESSID_V2');
     session_start();
 }
 
@@ -370,16 +370,6 @@ function CRM_GetRemoteIp(): string
 {
     $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
     return trim($ip);
-}
-
-function CRM_IpIsWhitelisted(string $ip): bool
-{
-    $wl = (array)CRM_CFG('session_ip_whitelist', []);
-    foreach ($wl as $allowed) {
-        if (!is_string($allowed)) { continue; }
-        if (trim($allowed) === $ip) { return true; }
-    }
-    return false;
 }
 
 function CRM_IsApiRequest(): bool
@@ -423,16 +413,19 @@ function CRM_SessionGuard(): void
 {
     $now = time();
 
-    $ip = CRM_GetRemoteIp();
-    $isOffice = CRM_IpIsWhitelisted($ip);
+    require_once CRM_ROOT . '/_inc/crm_user_context.php';
+
+    // Profil nur sinnvoll, wenn eingeloggt – sonst remote
+    $isLoggedIn = isset($_SESSION['crm_user']) && is_array($_SESSION['crm_user']);
+    $profile = $isLoggedIn ? CRM_UserContext_EnsureProfile() : 'remote';
 
     $idleOffice   = (int)CRM_CFG('session_idle_timeout_office_sec', 0);
     $idleRemote   = (int)CRM_CFG('session_idle_timeout_remote_sec', 0);
     $idleFallback = (int)CRM_CFG('session_idle_timeout_sec', 0);
 
     $idle = 0;
-    if ($isOffice && $idleOffice > 0) { $idle = $idleOffice; }
-    elseif (!$isOffice && $idleRemote > 0) { $idle = $idleRemote; }
+    if ($profile === 'office' && $idleOffice > 0) { $idle = $idleOffice; }
+    elseif ($profile !== 'office' && $idleRemote > 0) { $idle = $idleRemote; }
     else { $idle = $idleFallback; }
 
     $max = (int)CRM_CFG('session_max_lifetime_sec', 0);
@@ -458,9 +451,13 @@ function CRM_SessionGuard(): void
         }
     }
 
-    $_SESSION['last_activity']   = $now;
-    $_SESSION['session_profile'] = $isOffice ? 'office' : 'remote';
+    $_SESSION['last_activity'] = $now;
+
+    // Mirror/Compat
+    $_SESSION['crm_profile']     = $profile;
+    $_SESSION['session_profile'] = $profile;
 }
+
 
 error_log('[DBG] uri=' . ($_SERVER['REQUEST_URI'] ?? '') .
     ' accept=' . ($_SERVER['HTTP_ACCEPT'] ?? '') .

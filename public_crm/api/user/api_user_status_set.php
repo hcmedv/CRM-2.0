@@ -2,38 +2,43 @@
 declare(strict_types=1);
 
 /*
-  Datei: /public_crm/api/user/api_user_status_set.php
-  Zweck:
-  - GET  (auth): liest manual_state / pbx_busy für eingeloggten User aus mitarbeiter_status.json
-  - POST (auth): setzt manual_state (online|busy|away|off|auto) für eingeloggten User
-  - Persistenz: Datei aus Login-Modul (mitarbeiter_status.json) via CRM_LoginPath('status')
-*/
+ * Datei: /public_crm/api/user/api_user_status_set.php
+ *
+ * Zweck:
+ * - Setzt den manuellen Verfügbarkeitsstatus eines eingeloggten Users
+ * - Persistiert nach /data/login/mitarbeiter_status.json
+ *
+ * Regeln:
+ * - logged_in darf NICHT verloren gehen -> Update erfolgt immer per Merge auf bestehenden User-Record
+ * - manual_state wird gesetzt (online|busy|away|auto|off)
+ * - pbx_busy wird hier NICHT geändert (kommt separat aus PBX)
+ *
+ * Request:
+ * - POST JSON: {"manual_state":"busy"}  oder Form: manual_state=busy
+ *
+ * Response:
+ * - {"ok":true,"user":"admin","row":{...}}
+ */
 
-require_once __DIR__ . '/../../_inc/bootstrap.php';
+require_once dirname(__DIR__, 2) . '/_inc/bootstrap.php';
 require_once CRM_ROOT . '/_inc/auth.php';
 
-CRM_Auth_RequireLoginApi();
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
 
-/* -------------------------------------------------
-   Status-Datei auflösen (zentral über Login-Modul)
-   ------------------------------------------------- */
-$userStatusFile = CRM_LoginPath('status');
-if ($userStatusFile === '') {
-    http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'login_status_path_missing'], JSON_UNESCAPED_UNICODE);
+if (!function_exists('CRM_Auth_IsLoggedIn') || !CRM_Auth_IsLoggedIn()) {
+    http_response_code(401);
+    echo json_encode(['ok' => false, 'error' => 'not_logged_in'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
 
-define('USER_STATUS_DEFAULT_MANUAL', 'auto');
+/* ===================================================================================================================== */
+/* HELPERS                                                                                                               */
+/* ===================================================================================================================== */
 
-/* -------------------------------------------------
-   Helper
-   ------------------------------------------------- */
-function FN_ReadJsonFile(string $path): array
+function FN_ReadJsonBody(): array
 {
-    if (!is_file($path)) { return []; }
-    $raw = (string)file_get_contents($path);
+    $raw = (string)file_get_contents('php://input');
     if (trim($raw) === '') { return []; }
 
     $j = json_decode($raw, true);
@@ -45,88 +50,90 @@ function FN_WriteJsonFileAtomic(string $path, array $data): bool
     $dir = dirname($path);
     if (!is_dir($dir)) { return false; }
 
-    $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-    if ($json === false) { return false; }
+    $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    if (!is_string($json) || $json === '') { return false; }
 
-    $tmp = $path . '.tmp.' . getmypid();
+    $tmp = $path . '.tmp.' . (string)getmypid();
     if (file_put_contents($tmp, $json, LOCK_EX) === false) { return false; }
 
     if (@rename($tmp, $path)) { return true; }
-
     @unlink($tmp);
+
     return (file_put_contents($path, $json, LOCK_EX) !== false);
 }
 
-function FN_GetAuthedUserKey(): string
+/*
+ * WICHTIG: Merge-Update, damit Keys wie "logged_in" erhalten bleiben.
+ */
+function FN_Status_UpdateUser(array $db, string $userKey, array $set): array
 {
-    if (isset($_SESSION['crm_user']['user'])) {
-        return (string)$_SESSION['crm_user']['user'];
+    $prev = (isset($db[$userKey]) && is_array($db[$userKey])) ? (array)$db[$userKey] : [];
+
+    $allowed = ['manual_state', 'pbx_busy', 'updated_at', 'logged_in'];
+    $clean = [];
+    foreach ($set as $k => $v) {
+        if (in_array((string)$k, $allowed, true)) {
+            $clean[$k] = $v;
+        }
     }
-    return '';
+
+    $db[$userKey] = $clean + $prev;
+
+    return $db;
 }
 
-/* -------------------------------------------------
-   Main
-   ------------------------------------------------- */
-$method  = (string)($_SERVER['REQUEST_METHOD'] ?? 'GET');
-$userKey = FN_GetAuthedUserKey();
+function FN_Out(array $j, int $code = 200): void
+{
+    http_response_code($code);
+    echo json_encode($j, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
 
+/* ===================================================================================================================== */
+/* INPUT                                                                                                                 */
+/* ===================================================================================================================== */
+
+$in = FN_ReadJsonBody();
+$state = trim((string)($in['manual_state'] ?? ($_POST['manual_state'] ?? '')));
+
+$allowedStates = ['online', 'busy', 'away', 'auto', 'off'];
+if (!in_array($state, $allowedStates, true)) {
+    FN_Out(['ok' => false, 'error' => 'invalid_state', 'allowed' => $allowedStates], 400);
+}
+
+$u = (function_exists('CRM_Auth_User') ? (array)CRM_Auth_User() : []);
+$userKey = trim((string)($u['user'] ?? ''));
 if ($userKey === '') {
-    http_response_code(401);
-    echo json_encode(['ok' => false, 'error' => 'no_user_in_session'], JSON_UNESCAPED_UNICODE);
-    exit;
+    FN_Out(['ok' => false, 'error' => 'user_missing'], 500);
 }
 
-$db  = FN_ReadJsonFile($userStatusFile);
-$row = is_array($db[$userKey] ?? null) ? (array)$db[$userKey] : [];
-
-if ($method === 'GET') {
-    echo json_encode([
-        'ok'           => true,
-        'user'         => $userKey,
-        'manual_state' => (string)($row['manual_state'] ?? USER_STATUS_DEFAULT_MANUAL),
-        'pbx_busy'     => (bool)($row['pbx_busy'] ?? false),
-        'updated_at'   => $row['updated_at'] ?? null,
-    ], JSON_UNESCAPED_UNICODE);
-    exit;
+$statusFile = (function_exists('CRM_LoginPath') ? (string)CRM_LoginPath('status') : '');
+if ($statusFile === '') {
+    FN_Out(['ok' => false, 'error' => 'status_file_missing'], 500);
 }
 
-if ($method === 'POST') {
-    $raw = (string)file_get_contents('php://input');
-    $in  = json_decode($raw, true);
-    if (!is_array($in)) { $in = []; }
+/* ===================================================================================================================== */
+/* UPDATE                                                                                                                */
+/* ===================================================================================================================== */
 
-    $manual  = trim((string)($in['manual_state'] ?? ''));
-    $allowed = ['online', 'busy', 'away', 'off', 'auto'];
+$db = CRM_LoadJsonFile($statusFile, []);
+if (!is_array($db)) { $db = []; }
 
-    if (!in_array($manual, $allowed, true)) {
-        http_response_code(400);
-        echo json_encode(['ok' => false, 'error' => 'invalid_manual_state'], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
+$db = FN_Status_UpdateUser($db, $userKey, [
+    'manual_state' => $state,
+    'updated_at'   => date('c'),
+    // logged_in bleibt unberührt
+    // pbx_busy bleibt unberührt
+]);
 
-    // WICHTIG: busy bleibt busy (nicht auf online mappen!)
-    $db[$userKey] = [
-        'manual_state' => $manual,
-        'pbx_busy'     => (bool)($row['pbx_busy'] ?? false),
-        'updated_at'   => date('c'),
-    ];
-
-    if (!FN_WriteJsonFileAtomic($userStatusFile, $db)) {
-        http_response_code(500);
-        echo json_encode(['ok' => false, 'error' => 'write_failed'], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
-
-    echo json_encode([
-        'ok'           => true,
-        'user'         => $userKey,
-        'manual_state' => (string)$db[$userKey]['manual_state'],
-        'pbx_busy'     => (bool)$db[$userKey]['pbx_busy'],
-        'updated_at'   => (string)$db[$userKey]['updated_at'],
-    ], JSON_UNESCAPED_UNICODE);
-    exit;
+if (!FN_WriteJsonFileAtomic($statusFile, $db)) {
+    FN_Out(['ok' => false, 'error' => 'write_failed'], 500);
 }
 
-http_response_code(405);
-echo json_encode(['ok' => false, 'error' => 'method_not_allowed'], JSON_UNESCAPED_UNICODE);
+$row = (isset($db[$userKey]) && is_array($db[$userKey])) ? $db[$userKey] : [];
+
+FN_Out([
+    'ok'   => true,
+    'user' => $userKey,
+    'row'  => $row,
+]);

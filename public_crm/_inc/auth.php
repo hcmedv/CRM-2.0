@@ -8,6 +8,13 @@ declare(strict_types=1);
  * - Session-Check (Idle + MaxLifetime)
  * - Rollenprüfung
  * - Datenquelle: /data/login/mitarbeiter.json
+ *
+ * Änderung (Profil):
+ * - Profil (office|remote) wird nicht mehr aus settings_crm.php (IP-Whitelist) ermittelt,
+ *   sondern pro Mitarbeiter aus /data/login/mitarbeiter.json (cti.office_ips / default_profile)
+ *   via /_inc/crm_user_context.php.
+ * - Profil wird in $_SESSION['crm_profile'] gespeichert; für Abwärtskompatibilität zusätzlich
+ *   in $_SESSION['session_profile'] gespiegelt.
  */
 
 if (!defined('CRM_ROOT')) {
@@ -23,6 +30,8 @@ if (defined('CRM_AUTH_INCLUDED')) {
 define('CRM_AUTH_INCLUDED', true);
 
 define('CRM_LOGIN_FILE', CRM_BASE . '/data/login/mitarbeiter.json');
+
+require_once CRM_ROOT . '/_inc/crm_user_context.php';
 
 function CRM_Auth_IsLoggedIn(): bool
 {
@@ -66,6 +75,8 @@ function CRM_Auth_Login(string $user, string $pass): bool
         $uHash = isset($u['pass']) ? (string)$u['pass'] : '';
 
         if ($uUser === $user && $uHash !== '' && password_verify($pass, $uHash)) {
+
+            // Session-User setzen
             $_SESSION['crm_user'] = [
                 'user' => $uUser,
                 'name' => (string)($u['name'] ?? $uUser),
@@ -76,11 +87,16 @@ function CRM_Auth_Login(string $user, string $pass): bool
             $_SESSION['crm_login_at']      = $now;
             $_SESSION['crm_last_activity'] = $now;
 
-            // Profil einmalig setzen (für Countdown/Logging konsistent)
-            $_SESSION['session_profile'] = CRM_Auth_SessionProfile();
+            // Profil beim Login IMMER neu ermitteln
+            unset($_SESSION['crm_profile']);
+            unset($_SESSION['session_profile']);
+
+            $p = CRM_UserContext_EnsureProfile();   // neu erkennen
+            $_SESSION['session_profile'] = $p;      // compat
 
             return true;
         }
+
     }
 
     return false;
@@ -118,19 +134,20 @@ function CRM_Auth_ClientIp(): string
 
 /*
  * Profil-Erkennung für Session-Timeout:
- * - office: Client-IP ist in settings_crm.php session_ip_whitelist
- * - remote: sonst
+ * - Quelle: crm_user_context.php (pro Mitarbeiter)
+ * - Rückgabe: office|remote
  */
 function CRM_Auth_SessionProfile(): string
 {
-    $ip = CRM_Auth_ClientIp();
-    $wl = (array)CRM_CFG('session_ip_whitelist', []);
-    $wl = array_values(array_filter(array_map('trim', array_map('strval', $wl))));
+    if (!CRM_Auth_IsLoggedIn()) { return 'remote'; }
 
-    if ($ip !== '' && in_array($ip, $wl, true)) {
-        return 'office';
-    }
-    return 'remote';
+    $p = CRM_UserContext_EnsureProfile();   // setzt/liest $_SESSION['crm_profile']
+
+    // session_profile nur als Mirror/Compat
+    $_SESSION['session_profile'] = $p;
+
+    if ($p !== 'office' && $p !== 'remote') { return 'remote'; }
+    return $p;
 }
 
 /*
@@ -141,12 +158,8 @@ function CRM_Auth_GetIdleTimeoutSec(): int
 {
     $fallback = (int)CRM_CFG('session_idle_timeout_sec', 0);
 
-    // bevorzugt aus Session (damit UI/Countdown konsistent ist)
-    $profile = (string)($_SESSION['session_profile'] ?? '');
-    if ($profile === '') {
-        $profile = CRM_Auth_SessionProfile();
-        $_SESSION['session_profile'] = $profile;
-    }
+    // Profil IMMER aus crm_profile ableiten (nicht aus session_profile)
+    $profile = CRM_Auth_SessionProfile(); // setzt auch session_profile Mirror
 
     if ($profile === 'office') {
         $v = (int)CRM_CFG('session_idle_timeout_office_sec', 0);
@@ -159,6 +172,7 @@ function CRM_Auth_GetIdleTimeoutSec(): int
 
     return $fallback;
 }
+
 
 /*
  * Timeout-Handler (Page vs API)
