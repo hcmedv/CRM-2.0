@@ -6,8 +6,8 @@ declare(strict_types=1);
  *
  * Zweck:
  * - TeamViewer Connections via API abrufen (RAW)
- * - Debug-Kopie der RAW Daten OPTIONAL speichern (raw_store.*)
- * - Payload IMMER an Processor weiterreichen (In-Memory), unabhängig von raw_store.enabled
+ * - Payload immer an Processor weiterreichen (In-Memory)
+ * - OPTIONAL: Debug-RAW-Kopie gemäß raw_store.enabled schreiben (raw_store.filename_current)
  * - Danach Processor starten (Pfad aus Settings): teamviewer.api.process_path_file
  *
  * Zugriff:
@@ -232,8 +232,7 @@ if ($dataDir === '') {
     TV_Out(['ok' => false, 'error' => 'data_path_missing'], 500);
 }
 
-$api      = (array)CRM_MOD_CFG($MOD, 'api', []);
-$rawStore = (array)CRM_MOD_CFG($MOD, 'raw_store', []);
+$api = (array)CRM_MOD_CFG($MOD, 'api', []);
 
 /* ---------------- URL Build ---------------- */
 
@@ -282,17 +281,22 @@ $payload = [
     'data' => $tvJson,
 ];
 
-/* ---------------- RAW Debug Copy (optional) ---------------- */
+/* ---------------- In-Memory Übergabe an Processor ---------------- */
 
+$GLOBALS['CRM_TV_POLL_PAYLOAD'] = $payload;
+
+/* ---------------- RAW Store (Debug-Kopie, optional) ---------------- */
+
+$rawStore   = (array)CRM_MOD_CFG($MOD, 'raw_store', []);
 $rawWritten = false;
 $rawFile    = null;
 
-if (($rawStore['enabled'] ?? false) === true) {
-    $fileName = (string)($rawStore['filename_current'] ?? 'teamviewer_raw_current.json');
+if ((bool)($rawStore['enabled'] ?? false) === true) {
 
     // CRM_MOD_PATH('teamviewer','data') ist bereits /data/teamviewer/
-    // => kein data_dir nochmals anhängen
-    $rawFile = rtrim($dataDir, '/') . '/' . $fileName;
+    // => nur Dateiname anhängen, kein data_dir doppelt
+    $fileName = (string)($rawStore['filename_current'] ?? 'teamviewer_raw_current.json');
+    $rawFile  = rtrim($dataDir, '/') . '/' . $fileName;
 
     TV_FileWriteAtomic(
         $rawFile,
@@ -302,17 +306,13 @@ if (($rawStore['enabled'] ?? false) === true) {
     $rawWritten = true;
 
     $recCount = null;
-    if (isset($tvJson['records']) && is_array($tvJson['records'])) { $recCount = count($tvJson['records']); }
+    if (isset($payload['data']['records']) && is_array($payload['data']['records'])) { $recCount = count($payload['data']['records']); }
 
     TV_Log($MOD, 'raw_written', [
         'file'    => $rawFile,
         'records' => $recCount,
     ]);
 }
-
-/* ---------------- Processor Input (immer) ---------------- */
-
-$GLOBALS['CRM_TV_POLL_PAYLOAD'] = $payload;
 
 /* ---------------- Process ---------------- */
 

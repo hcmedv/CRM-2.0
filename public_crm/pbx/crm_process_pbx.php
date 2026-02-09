@@ -1,29 +1,38 @@
 <?php
 declare(strict_types=1);
 
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
+
 /*
  * Datei: /public_crm/api/pbx/crm_process_pbx.php
  *
  * Zweck:
  * - Verarbeitet eingehende PBX-Events (z. B. Sipgate) in ein CRM-Patch
- * - Optional: Speichert Rohdaten (RAW Store) unter /data/pbx/... (settings_pbx.php: pbx.raw_store.*)
+ * - Optional: Speichert Rohdaten (RAW Store) als Debug-Kopie (settings_pbx.php: pbx.raw_store.*)
  * - Schreibt das Event über den zentralen Writer: CRM_EventGenerator::upsert()
+ *
+ * Wichtig:
+ * - raw_store.enabled ist NUR Debug/Replay/Statistik (Kopie), kein Verarbeitungs-An/Aus.
  *
  * Export:
  * - function PBX_Process(array $pbx): array
  *   Rückgabe: ['ok'=>bool,'event_id'=>string,'written'=>bool,'created'=>bool,'error'=>string,'ctx'=>mixed]
  */
 
+
 if (!defined('CRM_ROOT')) {
-    require_once __DIR__ . '/../../_inc/bootstrap.php';
+    require_once __DIR__ . '/../_inc/bootstrap.php';
 }
 
 require_once CRM_ROOT . '/_lib/events/crm_events_write.php';
 
+
+
 function PBX_Process(array $pbx): array
 {
     // -------------------------------------------------
-    // 0) RAW Store (optional)
+    // 0) RAW Store (optional, Debug-Kopie)
     // -------------------------------------------------
     FN_PBX_RawStoreAppend($pbx);
 
@@ -61,7 +70,7 @@ function PBX_Process(array $pbx): array
 
     // started_at: wenn Input leer -> aus bestehendem Event nehmen
     if ($startedAt <= 0) {
-        $startedAt = (int)FN_PBX_ArrGet($existing, ['timing','started_at']);
+        $startedAt = (int)FN_PBX_ArrGet($existing, ['timing', 'started_at']);
     }
 
     // fallback started_at: received_at (newcall) oder jetzt
@@ -74,9 +83,9 @@ function PBX_Process(array $pbx): array
     // - bei hangup: received_at bevorzugen (oder existing)
     if ($endedAt <= 0) {
         if ($state === 'hangup') {
-            $endedAt = ($receivedAtTs > 0) ? $receivedAtTs : (int)FN_PBX_ArrGet($existing, ['timing','ended_at']);
+            $endedAt = ($receivedAtTs > 0) ? $receivedAtTs : (int)FN_PBX_ArrGet($existing, ['timing', 'ended_at']);
         } else {
-            $endedAt = (int)FN_PBX_ArrGet($existing, ['timing','ended_at']);
+            $endedAt = (int)FN_PBX_ArrGet($existing, ['timing', 'ended_at']);
         }
     }
 
@@ -215,8 +224,7 @@ function FN_PBX_NormalizeRel(string $s): string
 
 function FN_PBX_RawStoreCfg(): array
 {
-    $cfg = (array)CRM_MOD_CFG('pbx', 'raw_store', []);
-    return $cfg;
+    return (array)CRM_MOD_CFG('pbx', 'raw_store', []);
 }
 
 function FN_PBX_RawStoreEnabled(): bool
@@ -227,25 +235,35 @@ function FN_PBX_RawStoreEnabled(): bool
 
 function FN_PBX_RawStorePath(): string
 {
-    $cfg = (array)CRM_MOD_CFG('pbx', 'raw_store', []);
+    $cfg = FN_PBX_RawStoreCfg();
     if (!(bool)($cfg['enabled'] ?? false)) {
         return '';
     }
 
-    // KORREKT: Modulpfad ist bereits /data/pbx
+    // Modulpfad ist bereits /data/pbx
     $baseDir = rtrim((string)CRM_MOD_PATH('pbx', 'data'), '/');
     if ($baseDir === '') {
         return '';
     }
 
+    $subDir = FN_PBX_NormalizeRel((string)($cfg['data_dir'] ?? '')); // meist ''
     $fn = trim((string)($cfg['filename_current'] ?? 'pbx_raw_current.jsonl'));
-    if ($fn === '') {
-        $fn = 'pbx_raw_current.jsonl';
-    }
+    if ($fn === '') { $fn = 'pbx_raw_current.jsonl'; }
 
-    return $baseDir . '/' . $fn;
+    return $baseDir . '/' . ($subDir !== '' ? $subDir . '/' : '') . $fn;
 }
 
+function FN_PBX_RawStoreRotateIfTooLarge(string $path, int $maxBytes): void
+{
+    if ($maxBytes <= 0) { return; }
+    if (!is_file($path)) { return; }
+
+    $sz = @filesize($path);
+    if (!is_int($sz) || $sz <= $maxBytes) { return; }
+
+    $rot = $path . '.rot.' . date('Ymd_His');
+    @rename($path, $rot);
+}
 
 function FN_PBX_RawStoreAppend(array $pbx): void
 {
@@ -253,6 +271,7 @@ function FN_PBX_RawStoreAppend(array $pbx): void
         return;
     }
 
+    $cfg  = FN_PBX_RawStoreCfg();
     $path = FN_PBX_RawStorePath();
     if ($path === '') {
         return;
@@ -263,14 +282,18 @@ function FN_PBX_RawStoreAppend(array $pbx): void
         return;
     }
 
-    // JSONL line (eine Zeile pro Event) – robust & append-only
+    $maxBytes = (int)($cfg['max_bytes'] ?? 0);
+    if ($maxBytes > 0) {
+        FN_PBX_RawStoreRotateIfTooLarge($path, $maxBytes);
+    }
+
+    // jsonl append (eine Zeile pro Event)
     $line = json_encode($pbx, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if (!is_string($line) || $line === '') {
         return;
     }
     $line .= "\n";
 
-    // Append mit LOCK
     $fp = @fopen($path, 'ab');
     if ($fp === false) {
         return;
