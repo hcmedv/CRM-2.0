@@ -1,15 +1,14 @@
 <?php
 declare(strict_types=1);
 
-error_reporting(E_ALL);
-ini_set('display_errors', '1');
-
 /*
  * Datei: /public_crm/api/pbx/crm_process_pbx.php
  *
  * Zweck:
  * - Verarbeitet eingehende PBX-Events (z. B. Sipgate) in ein CRM-Patch
  * - Optional: Speichert Rohdaten (RAW Store) als Debug-Kopie (settings_pbx.php: pbx.raw_store.*)
+ * - Baut Patch via rules_pbx.php und reichert über rules_common.php + rules_enrich.php an
+ * - Merged State-Patches (PBX) gegen bestehendes Event (timing) bevor upsert()
  * - Schreibt das Event über den zentralen Writer: CRM_EventGenerator::upsert()
  *
  * Wichtig:
@@ -20,14 +19,28 @@ ini_set('display_errors', '1');
  *   Rückgabe: ['ok'=>bool,'event_id'=>string,'written'=>bool,'created'=>bool,'error'=>string,'ctx'=>mixed]
  */
 
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
 
 if (!defined('CRM_ROOT')) {
-    require_once __DIR__ . '/../_inc/bootstrap.php';
+    require_once __DIR__ . '/../../_inc/bootstrap.php';
 }
+
+/* ---------------- Writer ---------------- */
 
 require_once CRM_ROOT . '/_lib/events/crm_events_write.php';
 
+/* ---------------- Rules (PBX + Common + Enrich) ---------------- */
 
+$rulesPbx       = CRM_ROOT . '/_rules/pbx/rules_pbx.php';
+$rulesCommon    = CRM_ROOT . '/_rules/common/rules_common.php';
+$rulesEnrich    = CRM_ROOT . '/_rules/enrich/rules_enrich.php';
+
+if (is_file($rulesPbx)) { require_once $rulesPbx; }
+if (is_file($rulesCommon)) { require_once $rulesCommon; }
+if (is_file($rulesEnrich)) { require_once $rulesEnrich; }
+
+/* ===================================================================================================================== */
 
 function PBX_Process(array $pbx): array
 {
@@ -36,126 +49,44 @@ function PBX_Process(array $pbx): array
     // -------------------------------------------------
     FN_PBX_RawStoreAppend($pbx);
 
-    // ---------------- basics / normalize ----------------
-    $provider = strtolower(trim((string)($pbx['provider'] ?? $pbx['raw']['provider'] ?? 'sipgate')));
-
-    // call id: sipgate liefert oft "callId" / "origCallId"
-    $callId = trim((string)($pbx['call_id'] ?? $pbx['callId'] ?? $pbx['origCallId'] ?? ''));
-    if ($callId === '' && isset($pbx['raw']) && is_array($pbx['raw'])) {
-        $callId = trim((string)($pbx['raw']['call_id'] ?? $pbx['raw']['callId'] ?? $pbx['raw']['origCallId'] ?? ''));
+    // -------------------------------------------------
+    // 1) Patch bauen (source-spezifisch)
+    // -------------------------------------------------
+    if (!function_exists('RULES_PBX_BuildPatch')) {
+        return ['ok' => false, 'error' => 'rules_pbx_missing_entrypoint'];
     }
 
-    $from      = trim((string)($pbx['from'] ?? ''));
-    $to        = trim((string)($pbx['to'] ?? ''));
-    $direction = strtolower(trim((string)($pbx['direction'] ?? '')));
-    $state     = strtolower(trim((string)($pbx['state'] ?? $pbx['event'] ?? '')));
-
-    $receivedAtIso = trim((string)($pbx['received_at'] ?? ''));
-    $receivedAtTs  = FN_PBX_IsoToTs($receivedAtIso);
-
-    $timing = $pbx['timing'] ?? [];
-    if (!is_array($timing)) { $timing = []; }
-
-    $startedAtIn = (int)($timing['started_at'] ?? 0);
-    $endedAtIn   = (int)($timing['ended_at'] ?? 0);
-
-    // ---------------- existing event timing (preserve) ----------------
-    $existing = null;
-    if ($callId !== '') {
-        $existing = FN_PBX_FindEventByCallId($callId);
+    $patch = RULES_PBX_BuildPatch($pbx);
+    if (!is_array($patch)) {
+        return ['ok' => false, 'error' => 'rules_pbx_invalid_patch'];
     }
 
-    $startedAt = $startedAtIn;
-    $endedAt   = $endedAtIn;
-
-    // started_at: wenn Input leer -> aus bestehendem Event nehmen
-    if ($startedAt <= 0) {
-        $startedAt = (int)FN_PBX_ArrGet($existing, ['timing', 'started_at']);
+    // -------------------------------------------------
+    // 2) Common Normalize (optional)
+    // -------------------------------------------------
+    if (function_exists('RULES_COMMON_Normalize')) {
+        $p = RULES_COMMON_Normalize($patch);
+        if (is_array($p)) { $patch = $p; }
     }
 
-    // fallback started_at: received_at (newcall) oder jetzt
-    if ($startedAt <= 0) {
-        $startedAt = ($receivedAtTs > 0) ? $receivedAtTs : time();
+    // -------------------------------------------------
+    // 3) Enrich (optional)
+    // -------------------------------------------------
+    if (function_exists('RULES_ENRICH_Apply')) {
+        $p = RULES_ENRICH_Apply($patch);
+        if (is_array($p)) { $patch = $p; }
     }
 
-    // ended_at:
-    // - wenn Input vorhanden -> nehmen
-    // - bei hangup: received_at bevorzugen (oder existing)
-    if ($endedAt <= 0) {
-        if ($state === 'hangup') {
-            $endedAt = ($receivedAtTs > 0) ? $receivedAtTs : (int)FN_PBX_ArrGet($existing, ['timing', 'ended_at']);
-        } else {
-            $endedAt = (int)FN_PBX_ArrGet($existing, ['timing', 'ended_at']);
-        }
-    }
+    // -------------------------------------------------
+    // 3.1) PBX State-Merge: timing nie "weg überschreiben"
+    //     - wenn Patch timing leer ist -> entfernen
+    //     - wenn Patch timing nur teilweise ist -> mit bestehendem Event mergen
+    // -------------------------------------------------
+    $patch = FN_PBX_MergeTimingAgainstExistingEvent($patch);
 
-    if ($endedAt <= 0) {
-        // solange Call nicht beendet ist, minimal 1s Fenster
-        $endedAt = $startedAt + 1;
-    }
-
-    if ($endedAt < $startedAt) {
-        $endedAt = $startedAt + 1;
-    }
-
-    $duration = max(1, $endedAt - $startedAt);
-
-    // ---------------- display ----------------
-    $dirLabel = ($direction === 'in') ? 'In' : (($direction === 'out') ? 'Out' : 'Call');
-    $peer     = ($direction === 'in') ? $from : (($direction === 'out') ? $to : ($from !== '' ? $from : $to));
-    $peer     = ($peer !== '') ? $peer : 'unbekannt';
-
-    $title = "PBX: {$dirLabel} {$peer}";
-
-    $subtitleParts = [];
-    if ($provider !== '') { $subtitleParts[] = strtoupper($provider); }
-    if ($state !== '')    { $subtitleParts[] = $state; }
-    $subtitle = implode(' · ', $subtitleParts);
-
-    $tags = [];
-    if ($provider !== '')  { $tags[] = $provider; }
-    if ($direction !== '') { $tags[] = $direction; }
-    if ($state !== '')     { $tags[] = $state; }
-
-    // ---------------- patch ----------------
-    $refId = ($callId !== '')
-        ? $callId
-        : sha1($provider . '|' . $from . '|' . $to . '|' . $startedAt);
-
-    $patch = [
-        'event_source' => 'pbx',
-        'event_type'   => 'call',
-
-        'display'      => [
-            'title'    => $title,
-            'subtitle' => $subtitle,
-            'tags'     => array_values(array_unique(array_filter($tags))),
-        ],
-
-        'timing'       => [
-            'started_at'   => $startedAt,
-            'ended_at'     => $endedAt,
-            'duration_sec' => $duration,
-        ],
-
-        'refs'         => [
-            [
-                'ns' => 'pbx',
-                'id' => $refId,
-            ],
-        ],
-
-        'meta'         => [
-            'pbx' => [
-                'provider'    => $provider,
-                'call_id'     => $refId, // Pflichtfeld für Validator (settings_pbx.php)
-                'state'       => $state,
-                'received_at' => ($receivedAtIso !== '' ? $receivedAtIso : ($receivedAtTs > 0 ? date('c', $receivedAtTs) : date('c'))),
-                'raw'         => $pbx,
-            ],
-        ],
-    ];
-
+    // -------------------------------------------------
+    // 4) Writer (Commit/Validation passiert im Writer)
+    // -------------------------------------------------
     try {
         if (!class_exists('CRM_EventGenerator')) {
             return ['ok' => false, 'error' => 'writer_class_missing'];
@@ -184,6 +115,68 @@ function PBX_Process(array $pbx): array
     } catch (Throwable $e) {
         return ['ok' => false, 'error' => 'exception', 'message' => $e->getMessage()];
     }
+}
+
+/* ===================================================================================================================== */
+
+function FN_PBX_MergeTimingAgainstExistingEvent(array $patch): array
+{
+    $src = (string)($patch['event_source'] ?? '');
+    if ($src !== 'pbx') { return $patch; }
+
+    $callId = (string)($patch['meta']['pbx']['call_id'] ?? '');
+    $callId = trim($callId);
+    if ($callId === '') { return $patch; }
+
+    // leeres timing niemals schreiben (sonst überschreibt es bestehendes timing)
+    if (isset($patch['timing'])) {
+        if (!is_array($patch['timing']) || count($patch['timing']) === 0) {
+            unset($patch['timing']);
+            return $patch;
+        }
+    }
+
+    // wenn patch gar kein timing hat -> nichts zu mergen
+    if (!isset($patch['timing']) || !is_array($patch['timing'])) {
+        return $patch;
+    }
+
+    // existing event suchen
+    $existing = FN_PBX_FindEventByCallId($callId);
+    if (!is_array($existing)) { return $patch; }
+
+    $base = $existing['timing'] ?? [];
+    if (!is_array($base)) { $base = []; }
+
+    $new = $patch['timing'];
+
+    // started_at: nur ergänzen, wenn base fehlt
+    if (isset($new['started_at']) && (int)$new['started_at'] > 0) {
+        if (!isset($base['started_at']) || (int)$base['started_at'] <= 0) {
+            $base['started_at'] = (int)$new['started_at'];
+        }
+    }
+
+    // ended_at: übernehmen, wenn vorhanden
+    if (isset($new['ended_at']) && (int)$new['ended_at'] > 0) {
+        $base['ended_at'] = (int)$new['ended_at'];
+    }
+
+    // duration neu berechnen wenn möglich
+    $sa = (int)($base['started_at'] ?? 0);
+    $ea = (int)($base['ended_at'] ?? 0);
+    if ($sa > 0 && $ea > 0 && $ea >= $sa) {
+        $base['duration_sec'] = $ea - $sa;
+    }
+
+    // final: timing setzen oder entfernen
+    if (count($base) > 0) {
+        $patch['timing'] = $base;
+    } else {
+        unset($patch['timing']);
+    }
+
+    return $patch;
 }
 
 /* ===================================================================================================================== */
@@ -240,13 +233,12 @@ function FN_PBX_RawStorePath(): string
         return '';
     }
 
-    // Modulpfad ist bereits /data/pbx
     $baseDir = rtrim((string)CRM_MOD_PATH('pbx', 'data'), '/');
     if ($baseDir === '') {
         return '';
     }
 
-    $subDir = FN_PBX_NormalizeRel((string)($cfg['data_dir'] ?? '')); // meist ''
+    $subDir = FN_PBX_NormalizeRel((string)($cfg['data_dir'] ?? ''));
     $fn = trim((string)($cfg['filename_current'] ?? 'pbx_raw_current.jsonl'));
     if ($fn === '') { $fn = 'pbx_raw_current.jsonl'; }
 
@@ -287,7 +279,6 @@ function FN_PBX_RawStoreAppend(array $pbx): void
         FN_PBX_RawStoreRotateIfTooLarge($path, $maxBytes);
     }
 
-    // jsonl append (eine Zeile pro Event)
     $line = json_encode($pbx, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if (!is_string($line) || $line === '') {
         return;

@@ -9,6 +9,7 @@ declare(strict_types=1);
  * - Primär: Payload aus api_teamviewer_read.php (In-Memory)
  * - Fallback (Debug): raw_store Datei, falls vorhanden
  * - Baut Patches via rules_teamviewer.php
+ * - Reicht an via rules_common.php + rules_enrich.php (wie PBX)
  * - Upsert in Events-Store via Writer
  */
 
@@ -106,21 +107,30 @@ if (!isset($data['records']) || !is_array($data['records'])) {
 $items   = $data['records'];
 $records = count($items);
 
-/* ---------------- Rules ---------------- */
+/* ---------------- Rules (TeamViewer + Common + Enrich) ---------------- */
 
-$rulesFile = CRM_ROOT . '/_rules/teamviewer/rules_teamviewer.php';
-if (!is_file($rulesFile)) {
-    TVP_Log($MOD, 'rules_missing', ['file' => $rulesFile]);
-    TVP_Out(['ok' => false, 'error' => 'rules_missing', 'file' => $rulesFile], 500);
+$rulesTeamviewer = CRM_ROOT . '/_rules/teamviewer/rules_teamviewer.php';
+$rulesCommon     = CRM_ROOT . '/_rules/common/rules_common.php';
+$rulesEnrich     = CRM_ROOT . '/_rules/enrich/rules_enrich.php';
+
+if (!is_file($rulesTeamviewer)) {
+    TVP_Log($MOD, 'rules_missing', ['file' => $rulesTeamviewer]);
+    TVP_Out(['ok' => false, 'error' => 'rules_missing', 'file' => $rulesTeamviewer], 500);
 }
 
-require_once $rulesFile;
+require_once $rulesTeamviewer;
+if (is_file($rulesCommon)) { require_once $rulesCommon; }
+if (is_file($rulesEnrich)) { require_once $rulesEnrich; }
 
 if (!function_exists('RULES_TEAMVIEWER_BuildPatch')) {
     TVP_Out(['ok' => false, 'error' => 'rules_missing_entrypoint'], 500);
 }
 
-TVP_Log($MOD, 'rules_loaded', ['file' => $rulesFile]);
+TVP_Log($MOD, 'rules_loaded', [
+    'teamviewer' => $rulesTeamviewer,
+    'common'     => $rulesCommon,
+    'enrich'     => $rulesEnrich,
+]);
 
 /* ---------------- Writer ---------------- */
 
@@ -143,26 +153,64 @@ TVP_Log($MOD, 'process_start', [
 
 $upserts = 0;
 $errors  = 0;
+$errorSamples = [];
 $previewFirstPatch = null;
 
 foreach ($items as $row) {
     if (!is_array($row)) { continue; }
 
+    $rowId    = (string)($row['id'] ?? '');
+    $deviceId = (string)($row['deviceid'] ?? $row['deviceId'] ?? '');
+
     try {
         $patch = RULES_TEAMVIEWER_BuildPatch($row);
+
+        // Common Normalize (optional)
+        if (function_exists('RULES_COMMON_Normalize')) {
+            $p = RULES_COMMON_Normalize($patch);
+            if (is_array($p)) { $patch = $p; }
+        }
+
+        // Enrich (optional)
+        if (function_exists('RULES_ENRICH_Apply')) {
+            $p = RULES_ENRICH_Apply($patch);
+            if (is_array($p)) { $patch = $p; }
+        }
 
         if ($previewFirstPatch === null) {
             $previewFirstPatch = $patch;
         }
 
         $res = CRM_EventGenerator::upsert('teamviewer', 'remote', $patch);
+
         if (is_array($res) && ($res['ok'] ?? false)) {
             $upserts++;
         } else {
             $errors++;
+
+            if (TVP_IsDebug($MOD) && count($errorSamples) < 5) {
+                $errorSamples[] = [
+                    'row_id'    => $rowId,
+                    'deviceid'  => $deviceId,
+                    'error'     => is_array($res) ? (string)($res['error'] ?? 'writer_failed') : 'writer_failed',
+                    'message'   => is_array($res) ? (string)($res['message'] ?? '') : '',
+                    'ctx'       => is_array($res) ? $res : null,
+                ];
+            }
         }
+
     } catch (Throwable $e) {
         $errors++;
+
+        if (TVP_IsDebug($MOD) && count($errorSamples) < 5) {
+            $errorSamples[] = [
+                'row_id'    => $rowId,
+                'deviceid'  => $deviceId,
+                'error'     => 'exception',
+                'message'   => $e->getMessage(),
+            ];
+        }
+
         continue;
     }
 }
@@ -173,10 +221,16 @@ TVP_Log($MOD, 'process_done', [
     'errors'  => $errors,
 ]);
 
-TVP_Out([
+$out = [
     'ok'                  => true,
     'records'             => $records,
     'upserts'             => $upserts,
     'errors'              => $errors,
     'preview_first_patch' => $previewFirstPatch,
-]);
+];
+
+if (TVP_IsDebug($MOD)) {
+    $out['error_samples'] = $errorSamples;
+}
+
+TVP_Out($out);
