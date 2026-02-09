@@ -212,6 +212,15 @@ if ($mod !== '') {
       </div>
 
       <div class="topnav__right">
+       <!-- Event button -->
+        <?php
+        $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+        $isEvents = (is_string($path) && (strpos($path, '/events') === 0)); // /events/ und /events/...
+        $quickCls = 'navbtn navbtn--quick' . ($isEvents ? ' is-active' : '');
+        ?>
+        <a href="/events/" class="<?= htmlspecialchars($quickCls, ENT_QUOTES) ?>" title="Events" aria-label="Events">☰</a>
+
+
 
       <?php if ($ctiEnabled): ?>
         <!-- CTI Integration -->

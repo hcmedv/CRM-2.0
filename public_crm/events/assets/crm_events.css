@@ -1,1 +1,273 @@
-/* crm_events.css */
+/* =================================================================================================
+   EVENTS CSS
+   Datei: /events/assets/crm_events.css
+   Zweck:
+   - Grid Layout (A/C Lanes + D/E/F Full-Width)
+   - Lanes: feste Höhe + internes Scrollen
+   - Overlay (Events) als Modal/Overlay (ein System – aktuell: .events-overlay)
+   Hinweis:
+   - Debug-Badge (html::before) optional, zum Testen auskommentieren
+   ================================================================================================= */
+
+/* =================================================================================================
+   0) DEBUG (optional)
+   ================================================================================================= */
+/*
+html::before{
+  content:"events.css LOADED";
+  position:fixed;
+  left:10px;
+  bottom:10px;
+  z-index:99999;
+  background:#000;
+  color:#fff;
+  padding:6px 8px;
+  border-radius:8px;
+  font-size:12px;
+}
+*/
+
+/* =================================================================================================
+   1) GRID LAYOUT (Events Seite)
+   ================================================================================================= */
+.grid.grid--events{
+  grid-template-columns: 1fr 1fr;
+}
+
+.grid.grid--events > .card{
+  grid-column: auto;
+}
+
+.grid.grid--events > .card.card--wide{
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 980px){
+  .grid.grid--events{
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =================================================================================================
+   2) LANES (A / C): feste Höhe + internes Scrollen
+   ================================================================================================= */
+.grid.grid--events > .card.card--lane{
+  display: flex;
+  flex-direction: column;
+
+  /* Card bekommt eine echte Höhe -> sonst kein Scroll */
+  height: calc(100vh - 280px);    /* Topnav+Subnav+Padding grob */
+  min-height: 360px;
+  max-height: 720px;
+}
+
+/* Header bleibt sichtbar */
+.grid.grid--events > .card.card--lane .card__title{
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+/* Body nimmt Resthöhe der Card */
+.grid.grid--events > .card.card--lane .card__body{
+  height: calc(100% - 44px);      /* 44px ~ card__title */
+  overflow: hidden;
+  padding: 10px;
+}
+
+/* Scrollfläche füllt Body */
+.grid.grid--events > .card.card--lane .events-lane__scroll{
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* Scrollfläche der Lane */
+.events-lane__scroll{
+  height: 100%;
+  overflow-y: auto;
+
+  /* Platz rechts für Scrollbar + Fokusrahmen */
+  padding-right: 8px;
+  box-sizing: content-box;
+}
+
+/* =================================================================================================
+   3) OVERLAY (Events) – System B
+   ================================================================================================= */
+
+/* Overlay Wrapper */
+.events-overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  z-index: 2000;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 72px;           /* Platz für Header */
+}
+
+/* hidden-Attribut respektieren */
+.events-overlay[hidden]{
+  display: none;
+}
+
+/* Fenster */
+.events-overlay__panel{
+  width: min(1160px, calc(100vw - 32px));
+  height: calc(100vh - 90px);  /* fast volle Viewport-Höhe */
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Kopf: Titel links, Close rechts */
+.events-overlay__head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(0,0,0,.08);
+  flex: 0 0 auto;
+  min-height: 44px;
+}
+
+/* Body: einzige Scrollfläche */
+.events-overlay__body{
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 16px 18px;
+}
+
+/* Close Button */
+.events-overlay__close{
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,.16);
+  background: #fff;
+  cursor: pointer;
+  line-height: 1;
+}
+
+/* Responsive */
+@media (max-width: 900px){
+  .events-overlay{
+    padding-top: 64px;
+  }
+
+  .events-overlay__panel{
+    width: calc(100vw - 16px);
+    height: calc(100vh - 80px);
+    border-radius: 12px;
+  }
+}
+
+/* Kopf */
+.events-overlay__head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:10px 16px;
+  border-bottom:1px solid rgba(0,0,0,.08);
+  flex:0 0 auto;
+  min-height:44px;
+}
+
+/* Body */
+.events-overlay__body{
+  flex:1 1 auto;
+  overflow-y:auto;
+  padding:16px 18px;
+}
+
+/* Footer: fehlte -> Linie + Padding */
+.events-overlay__foot{
+  flex:0 0 auto;
+  padding:10px 16px;
+  border-top:1px solid rgba(0,0,0,.08);
+  min-height:44px;
+  display:flex;
+  align-items:center;
+}
+
+
+/* =================================================================================================
+   4) LEGACY / UNUSED (aktuell nicht aktiv) – #events-modal
+   -------------------------------------------------------------------------------------------------
+   Hinweis: Du hast parallel #events-modal UND .events-overlay. Das ist doppelt.
+   Wenn du sicher bist, dass nur .events-overlay genutzt wird:
+   - Block unten komplett löschen ODER bewusst als „legacy“ behalten.
+   ================================================================================================= */
+/*
+#events-modal{
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: none;
+}
+
+#events-modal.is-open{
+  display: block;
+}
+
+#events-modal .modal__backdrop{
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+}
+
+#events-modal .modal__panel{
+  position: relative;
+  margin: 6vh auto 0 auto;
+  width: min(92vw, 1200px);
+  max-height: 85vh;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid rgba(0,0,0,.12);
+  box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#events-modal .modal__head,
+#events-modal .modal__foot{
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(0,0,0,.08);
+  flex: 0 0 auto;
+}
+
+#events-modal .modal__foot{
+  border-bottom: 0;
+  border-top: 1px solid rgba(0,0,0,.08);
+}
+
+#events-modal .modal__body{
+  padding: 14px;
+  overflow: auto;
+  flex: 1 1 auto;
+}
+
+#events-modal .modal__title{ font-weight: 700; }
+
+#events-modal .modal__close{
+  float: right;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,.16);
+  background: #fff;
+  cursor: pointer;
+}
+
+@media (max-width: 620px){
+  #events-modal .modal__panel{
+    width: 92vw;
+    max-height: 92vh;
+  }
+}
+*/

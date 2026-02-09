@@ -130,7 +130,7 @@ function FN_H(string $s) : string
           <div class="space"></div>
 
           <!-- BEGIN: Message-Bereich (fixe Höhe, springt nicht) -->
-          <div class="msg msg--fixed" id="tvMsg" aria-live="polite">Mit Klick auf „Verbinden“ erlauben Sie die Fernwartung für diese Sitzung.</div>
+          <div class="msg msg--fixed" id="tvMsg" aria-live="polite">Mit Klick auf <b>„Verbinden“</b> erlauben Sie die Fernwartung für diese Sitzung.</div>
           <!-- END: Message-Bereich -->
           <!-- END: Fernwartung Intro/Info -->
 
@@ -139,7 +139,9 @@ function FN_H(string $s) : string
           <!-- BEGIN: Fernwartung Bottom Bar -->
           <div class="tvbar">
             <div class="tvbar__left">
-              <label class="label tvbar__label" for="tvCode">Service-Code</label>
+              <!-- label class="label tvbar__label" for="tvCode">Service-Code:</label -->
+              <div class="space"></div>
+              <div class="space"></div>
               <div class="space"></div>
 
               <input
@@ -148,7 +150,7 @@ function FN_H(string $s) : string
                 name="tv_code"
                 inputmode="numeric"
                 autocomplete="one-time-code"
-                placeholder="123456"
+                placeholder="Service-Code"
                 maxlength="10"
                 minlength="4"
                 pattern="[0-9]*"
@@ -524,7 +526,7 @@ function FN_H(string $s) : string
   });
 
   tvHelp?.addEventListener('click', () => {
-    tvSetMsg("Hinweis: Sie erhalten den Code vom Techniker.\nBei Problemen bitte Kontaktformular nutzen.", 'info');
+    tvSetMsg("Hinweis: Sie erhalten den Code vom Techniker.", 'info');
   });
   /* ===============================================================================================
      END: TEAMVIEWER SUPPORT (CODE -> LINK -> REDIRECT)
