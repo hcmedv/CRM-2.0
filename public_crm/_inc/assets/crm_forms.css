@@ -27,8 +27,7 @@
    INPUTS / LABELS
    ========================================================================== */
 
-.input,
-.evt-input{
+.input{
   width:100%;
   box-sizing:border-box;
   border:1px solid #d6d6d6;
@@ -40,16 +39,16 @@
   background:#fff;
 }
 
-.input:focus,
-.evt-input:focus{
+.input:focus{
   border-color:#9bbcff;
 }
 
-.evt-label{
+.label{
   display:block;
-  font-size:12px;
+  font-size:14px;
   font-weight:600;
-  margin-bottom:4px;
+  margin-top:6px;
+  margin-bottom:0px;
 }
 
 .events-muted{
@@ -57,18 +56,6 @@
   color:#666;
 }
 
-/* ==========================================================================
-   BUTTONS (ergänzend zu crm.css)
-   ========================================================================== */
-
-.btn{
-  border-radius:10px;
-}
-
-.btn--xs{
-  font-size:11px;
-  padding:4px 8px;
-}
 
 /* ==========================================================================
    AUTOCOMPLETE / SUGGEST (global, Camera / Events / CTI-light)
@@ -164,3 +151,47 @@
 }
 
 
+/* ===================================================================
+   CRM AUTOFILL / SUGGEST
+=================================================================== */
+
+.crm-suggest{
+  position:absolute;
+  left:0;
+  right:0;
+  top:calc(100% + 6px);
+  z-index:6000;
+
+  background:#fff;
+  border:1px solid rgba(0,0,0,.15);
+  border-radius:10px;
+  box-shadow:0 10px 30px rgba(0,0,0,.08);
+  overflow:hidden;
+}
+
+.crm-suggest__item{
+  padding:10px 12px;
+  cursor:pointer;
+  user-select:none;
+}
+
+.crm-suggest__item:hover,
+.crm-suggest__item.is-active{
+  background:rgba(0,0,0,.04);
+}
+
+/* Optional: wenn dein HTML suggest__row / suggest__badge nutzt */
+.crm-suggest .suggest__row{
+  display:flex;
+  gap:10px;
+  align-items:flex-start;
+  justify-content:space-between;
+}
+
+.crm-suggest .suggest__badge{
+  flex:0 0 auto;
+  font-size:12px;
+  padding:2px 8px;
+  border-radius:999px;
+  background:rgba(0,0,0,.06);
+}

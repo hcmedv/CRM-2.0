@@ -45,10 +45,10 @@ require_once CRM_ROOT . '/_inc/page_top.php';
         <div class="cam_row">
           <div class="cam_col cam_col--grow autocomplete">
 
-            <label class="evt-label" for="cam_customer_q">Kunde / Vorgang</label>
+            <label class="label" for="cam_customer_q">Kunde / Vorgang</label>
 
             <div class="cam_customerline">
-              <button class="chip chip--muted" type="button" id="cam_customer_chip" title="Kunde löschen / ändern">Unbekannt</button>
+              <button class="crm-fieldchip" type="button" id="cam_customer_chip" title="Kunde löschen / ändern">Unbekannt</button>
 
               <input class="input" id="cam_customer_q" type="text" placeholder="Kunde suchen …" autocomplete="off">
 
@@ -64,7 +64,7 @@ require_once CRM_ROOT . '/_inc/page_top.php';
 
         <div class="cam_row" style="margin-top:10px;">
           <div class="cam_col cam_col--grow">
-            <label class="evt-label" for="cam_title">Titel (Pflicht)</label>
+            <label class="label" for="cam_title">Titel (Pflicht)</label>
             <input class="input" id="cam_title" type="text" placeholder="z. B. Router getauscht">
           </div>
         </div>
@@ -89,10 +89,10 @@ require_once CRM_ROOT . '/_inc/page_top.php';
             <option value="2560x1440">2560×1440 (QHD)</option>
           </select>
 
-          <button class="btn" type="button" id="cam_start">Kamera starten</button>
+          <button class="crm-btn" type="button" id="cam_start">Kamera starten</button>
 
-          <button class="btn" type="button" id="cam_stop" disabled>Kamera stoppen</button>
-          <button class="btn btnPrimary" type="button" id="cam_snap" disabled>Foto aufnehmen</button>
+          <button class="crm-btn" type="button" id="cam_stop" disabled>Kamera stoppen</button>
+          <button class="crm-btn crm-btn-primary" type="button" id="cam_snap" disabled>Foto aufnehmen</button>
         </div>
 
         <div class="muted" id="cam_status">Kamera: aus</div>
@@ -106,9 +106,9 @@ require_once CRM_ROOT . '/_inc/page_top.php';
       <div class="card__body">
 
         <div class="cam_actions cam_actions--top">
-          <button class="btn btnPrimary" type="button" id="cam_doc" disabled>Dokumentieren</button>
-          <button class="btn" type="button" id="cam_upload" disabled>Fotos hochladen</button>
-          <button class="btn btnDanger" type="button" id="cam_clear" disabled>Änderungen verwerfen</button>
+          <button class="crm-btn crm-btn-pPrimary" type="button" id="cam_doc" disabled>Dokumentieren</button>
+          <button class="crm-btn" type="button" id="cam_upload" disabled>Fotos hochladen</button>
+          <button class="crm-btn btnDanger" type="button" id="cam_clear" disabled>Änderungen verwerfen</button>
 
           <div class="cam_spacer"></div>
           <div class="muted"><span id="cam_queue_info">Fotos: 0</span></div>
@@ -122,7 +122,7 @@ require_once CRM_ROOT . '/_inc/page_top.php';
           <div class="cam_lightbox__panel" role="dialog" aria-modal="true">
             <div class="cam_lightbox__head">
               <div class="cam_lightbox__title" id="cam_lightbox_title">Vorschau</div>
-              <button class="btn btn--xs" type="button" data-close>Schließen</button>
+              <button class="crm-fieldchip btn--xs" type="button" data-close>Schließen</button>
             </div>
             <div class="cam_lightbox__body">
               <img id="cam_lightbox_img" alt="">

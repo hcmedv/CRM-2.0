@@ -1,0 +1,335 @@
+/* =================================================================================================
+   CRM 2.0 – BERICHT EINSATZ MODULE
+   Datei: crm_bericht_einsatz.css
+================================================================================================= */
+
+/* =================================================================================================
+   1) CARD WRAPPER
+================================================================================================= */
+
+.be_card{
+  margin-bottom:16px;
+}
+
+/* Flyouts dürfen nicht abgeschnitten werden */
+.be_card .card__body{
+  overflow:visible;
+}
+
+
+/* =================================================================================================
+   2) CUSTOMER (Chip + Input) + AUTOCOMPLETE LAYERING
+================================================================================================= */
+
+.be_row{
+  display:flex;
+  gap:14px;
+  align-items:flex-end;
+  flex-wrap:wrap;
+}
+
+.be_row--tight + .be_row{
+  margin-top:6px;
+}
+
+.be_col{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
+.be_col--grow{
+  flex:1 1 100%;
+  min-width:320px;
+}
+
+.be_customerline{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+#be_customer_chip{
+  flex:0 0 auto;
+}
+
+/* Korrekt: im HTML heißt das Feld be_kunde_firma (nicht be_customer_q) */
+#be_kunde_firma{
+  flex:1 1 auto;
+  min-width:220px;
+}
+
+/* Autocomplete-Wrapper als Stacking Context */
+.be_card .autocomplete{
+  position:relative;
+  z-index:1200; /* über Cards/Flyouts, unter CTI (10000) */
+}
+
+/* Suggest-Flyout (nur modulbezogen – kein globales .suggest überschreiben) */
+.be_card .crm-suggest{
+  position:absolute;
+  left:0;
+  right:0;
+  top:calc(100% + 6px);
+  z-index:6000;
+}
+
+
+/* =================================================================================================
+   3) META (Datum | h/km | Mitarbeiter) – responsive
+================================================================================================= */
+
+.be_meta{
+  display:grid;
+  grid-template-columns: 220px 260px 1fr;
+  gap:14px;
+  align-items:end;
+}
+
+/* h/km inputs */
+.be_timekm_grid{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:10px;
+}
+
+.be_timekm_item{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+
+/* Mitarbeiter rechts begrenzen (Desktop) */
+.be_meta__employee{
+  justify-self:end;
+}
+
+.be_meta__employee #be_employee{
+  width:420px;
+  max-width:100%;
+}
+
+/* Labels über h/km kompakter */
+.be_meta__timekm_labels .label{
+  margin:0;
+  line-height:1.15;
+}
+
+.be_meta__timekm_labels .label + .label{
+  margin-top:2px;
+  opacity:.85;
+}
+
+/* Tablet: 2 Spalten, Mitarbeiter unter Datum/hkm */
+@media (max-width: 980px){
+  .be_meta{
+    grid-template-columns: 1fr 1fr;
+  }
+  .be_meta__employee{
+    grid-column: 1 / -1;
+    justify-self:stretch;
+  }
+  .be_meta__employee #be_employee{
+    width:100%;
+  }
+}
+
+/* Handy: alles untereinander */
+@media (max-width: 520px){
+  .be_meta{
+    grid-template-columns: 1fr;
+  }
+}
+
+.be_meta--allg{
+  display:grid;
+  grid-template-columns: 220px 160px 160px 1fr;
+  gap:14px;
+  align-items:end;
+}
+
+@media (max-width: 980px){
+  .be_meta--allg{
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 520px){
+  .be_meta--allg{
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =================================================================================================
+   4) DATENSICHERUNG – Choices untereinander
+================================================================================================= */
+
+.be_choices{
+  display:block;
+  margin-top:6px;
+}
+
+.be_chk{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  margin:6px 0;
+  white-space:normal;
+}
+
+.be_chk input{
+  margin-top:3px;
+}
+
+
+/* =================================================================================================
+   5) TEXTAREAS
+================================================================================================= */
+
+.be_textarea{
+  min-height:110px;
+  resize:vertical;
+}
+
+
+/* =================================================================================================
+   6) EINSATZ / TÄTIGKEITEN / MATERIAL – Row Layout Helper
+================================================================================================= */
+
+.be_line{
+  display:grid;
+  grid-template-columns: 160px 110px 110px 140px 1fr 34px; /* date | start | end | min | mitarbeiter | x */
+  gap:10px;
+  align-items:end;
+}
+
+.be_line__del{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+
+/* Material: artno | text | qty | unit | x */
+.be_matline{
+  display:grid;
+  grid-template-columns: 160px 1fr 110px 120px 34px;
+  gap:10px;
+  align-items:end;
+}
+
+/* Tätigkeiten: text | x */
+.be_taskline{
+  display:grid;
+  grid-template-columns: 1fr 34px;
+  gap:10px;
+  align-items:end;
+}
+
+/* Mobile: alles untereinander */
+@media (max-width: 720px){
+  .be_line,
+  .be_matline,
+  .be_taskline{
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* =================================================================================================
+   7) SIGNATURE CANVAS
+================================================================================================= */
+
+.be_sig{
+  width:100%;
+  height:auto;
+  border-radius:12px;
+  background:#fff;
+  border:1px solid rgba(0,0,0,.15);
+  touch-action:none;
+  max-height:200px; /* optisch niedriger */
+}
+
+
+/* =================================================================================================
+   8) ACTIONS
+================================================================================================= */
+
+.be_actions{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  align-items:center;
+  margin-top:10px;            /* <= Abstand nach oben */
+}
+
+.be_spacer{
+  flex:1 1 auto;
+}
+
+/* ===================== Einsatzzeiten ===================== */
+
+.be_e_head,
+.be_e_row{
+  display:grid;
+  grid-template-columns: 180px 120px 120px 160px 1fr 44px;
+  gap:10px;
+  align-items:center;
+}
+
+.be_e_head{
+  font-size: 12px;
+  color:#666;
+  margin: 6px 0 8px;
+}
+
+.be_e_row .be_e_cell{ min-width:0; }   /* wichtig für 1fr */
+.be_e_row .input{ width:100%; }
+
+/* ===================== Tätigkeiten ===================== */
+
+.be_t_row{
+  display:grid;
+  grid-template-columns: 1fr 44px;
+  gap:10px;
+  align-items:center;
+}
+.be_t_row .input{ width:100%; }
+
+/* ===================== Material ===================== */
+
+.be_m_row{
+  display:grid;
+  grid-template-columns: 220px 1fr 100px 120px 44px;
+  gap:10px;
+  align-items:center;
+}
+
+.be_m_row .input{ width:100%; }
+.be_m_row .be_m_cell{ min-width:0; }
+
+/* Suggest im Grid sauber */
+.be_m_row .autocomplete{ position:relative; }
+.be_m_row .m_suggest{ left:0; right:0; }
+
+/* Delete-Zellen: Button mittig */
+.be_e_row .be_e_delcell,
+.be_t_row .be_t_del,
+.be_m_row .be_m_del{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+/* Spaltenbreite näher am Icon-Button */
+.be_e_head,
+.be_e_row{
+  grid-template-columns: 180px 120px 120px 160px 1fr 38px;
+}
+
+.be_t_row{
+  grid-template-columns: 1fr 38px;
+}
+
+.be_m_row{
+  grid-template-columns: 220px 1fr 100px 120px 38px;
+}

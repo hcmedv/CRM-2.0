@@ -4,15 +4,18 @@ declare(strict_types=1);
 /*
  * Datei: /public/api/crm/api_crm_search_customers.php
  * Zweck:
- * - Zentrale Kunden-/User-Suche (CRM, LN, CTI)
+ * - Kunden-Suche (Adressliste) für Bericht Einsatz / LN / CRM
  * - Read-only, JSON
  * - Nutzt settings_crm.php -> files[*] via CFG_FILE_REQ()
- * - Ranking (Name/Firma/KN/Keyword/Ort/Telefon/E-Mail)
+ * - Ranking (Firma/Name/KN/Keyword/Ort/Telefon/E-Mail)
  *
  * Query:
  * - q=...              (min. 2 Zeichen)
- * - type=all|customer|m365   (default: all)
  * - limit=1..25        (default: 10)
+ *
+ * Hinweis:
+ * - Dieses Endpoint liefert bewusst NUR Kunden aus der Adressliste (keine M365 Kontakte).
+ * - Inaktive Kunden werden gefiltert (active=false bzw. inactive=true).
  */
 
 require_once __DIR__  . '/../../_inc/bootstrap.php';
@@ -24,7 +27,6 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
 $q     = trim((string)($_GET['q'] ?? ''));
-$type  = trim((string)($_GET['type'] ?? 'all'));   // all|customer|m365
 $limit = (int)($_GET['limit'] ?? 10);
 
 if ($limit < 1)  $limit = 10;
@@ -33,15 +35,6 @@ if ($limit > 25) $limit = 25;
 if ($q === '' || mb_strlen($q) < 2) {
     echo json_encode(['ok' => true, 'items' => []], JSON_UNESCAPED_UNICODE);
     exit;
-}
-
-$typeLower = mb_strtolower($type);
-$includeCustomers = ($typeLower === '' || $typeLower === 'all' || $typeLower === 'customer' || $typeLower === 'kunden');
-$includeM365      = ($typeLower === '' || $typeLower === 'all' || $typeLower === 'm365');
-
-if (!$includeCustomers && !$includeM365) {
-    $includeCustomers = true;
-    $includeM365 = true;
 }
 
 function CRM_NormalizePhoneDE(string $in): string
@@ -85,18 +78,45 @@ function CRM_DedupePhones(array $phonesRaw): array
     return array_keys($norm);
 }
 
+function CRM_IsCustomerActive(array $c): bool
+{
+    // bevorzugt: inactive=true -> inaktiv
+    if (array_key_exists('inactive', $c)) {
+        $v = $c['inactive'];
+        if (is_bool($v)) return ($v === false);
+        $s = trim((string)$v);
+        if ($s === '') return true;
+        if (in_array(strtolower($s), ['1','true','yes','ja'], true)) return false;
+        return true;
+    }
+
+    // alternativ: active=false -> inaktiv
+    if (array_key_exists('active', $c)) {
+        $v = $c['active'];
+        if (is_bool($v)) return ($v === true);
+        $s = trim((string)$v);
+        if ($s === '') return false;
+        if (in_array(strtolower($s), ['1','true','yes','ja'], true)) return true;
+        if (in_array(strtolower($s), ['0','false','no','nein'], true)) return false;
+        return false;
+    }
+
+    // wenn Feld nicht vorhanden: als aktiv behandeln
+    return true;
+}
+
 function CRM_ScoreMatch(array $fieldsLower, string $qLower): int
 {
     $s = 0;
 
-    if (($fieldsLower['name'] ?? '') !== '' && strpos($fieldsLower['name'], $qLower) !== false) $s += 70;
-    if (($fieldsLower['company'] ?? '') !== '' && strpos($fieldsLower['company'], $qLower) !== false) $s += 60;
+    if (($fieldsLower['company'] ?? '') !== '' && strpos($fieldsLower['company'], $qLower) !== false) $s += 70;
+    if (($fieldsLower['name'] ?? '') !== '' && strpos($fieldsLower['name'], $qLower) !== false) $s += 55;
+
+    if (($fieldsLower['kn'] ?? '') !== '' && strpos($fieldsLower['kn'], $qLower) !== false) $s += 90;
 
     if (($fieldsLower['keyword'] ?? '') !== '' && strpos($fieldsLower['keyword'], $qLower) !== false) $s += 35;
     if (($fieldsLower['city'] ?? '') !== '' && strpos($fieldsLower['city'], $qLower) !== false) $s += 25;
     if (($fieldsLower['mail'] ?? '') !== '' && strpos($fieldsLower['mail'], $qLower) !== false) $s += 30;
-
-    if (($fieldsLower['kn'] ?? '') !== '' && strpos($fieldsLower['kn'], $qLower) !== false) $s += 80;
 
     return $s;
 }
@@ -111,119 +131,109 @@ function CRM_ScorePhoneMatch(array $phonesNorm, string $qPhone): int
     return 0;
 }
 
+function CRM_PickString(array $a, array $keys, string $def = ''): string
+{
+    foreach ($keys as $k) {
+        if (isset($a[$k]) && is_string($a[$k]) && trim($a[$k]) !== '') return trim((string)$a[$k]);
+        if (isset($a[$k]) && (is_int($a[$k]) || is_float($a[$k])) && (string)$a[$k] !== '') return trim((string)$a[$k]);
+    }
+    return $def;
+}
+
+function CRM_PickEmails(array $c): array
+{
+    $out = [];
+
+    if (isset($c['emails']) && is_array($c['emails'])) {
+        foreach ($c['emails'] as $e) {
+            $s = trim((string)$e);
+            if ($s !== '') $out[$s] = true;
+        }
+    }
+
+    $single = CRM_PickString($c, ['email', 'mail'], '');
+    if ($single !== '') $out[$single] = true;
+
+    return array_keys($out);
+}
+
 $qLower = mb_strtolower($q);
 $qPhone = (CRM_IsPhoneQuery($q) ? CRM_NormalizePhoneDE($q) : '');
 
 $ranked = [];
 
 /* -----------------------------
-   Kunden: Ranking
+   Kunden (Adressliste): Ranking + Felder
    ----------------------------- */
-if ($includeCustomers) {
-    $customersJson = CRM_LoadJsonFile(CFG_FILE_REQ('KUNDEN_JSON'), []);
-    $phoneMap      = CRM_LoadJsonFile(CFG_FILE_REQ('KUNDEN_PHONE_MAP_JSON'), []);
-    $kundenList    = CRM_ExtractList($customersJson, ['customers', 'items']);
 
-    foreach ($kundenList as $c) {
-        if (!is_array($c)) continue;
+$customersJson = CRM_LoadJsonFile(CFG_FILE_REQ('KUNDEN_JSON'), []);
+$phoneMap      = CRM_LoadJsonFile(CFG_FILE_REQ('KUNDEN_PHONE_MAP_JSON'), []);
+$kundenList    = CRM_ExtractList($customersJson, ['customers', 'items']);
 
-        $kn      = (string)($c['address_no'] ?? $c['customer_number'] ?? '');
-        $name    = (string)($c['name'] ?? '');
-        $company = (string)($c['company'] ?? '');
-        $keyword = (string)($c['keyword'] ?? '');
-        $city    = (string)($c['city'] ?? '');
+foreach ($kundenList as $c) {
+    if (!is_array($c)) continue;
+    if (!CRM_IsCustomerActive($c)) continue;
 
-        $mail = '';
-        if (isset($c['emails'][0]) && is_string($c['emails'][0])) $mail = (string)$c['emails'][0];
-        if ($mail === '' && isset($c['email']) && is_string($c['email'])) $mail = (string)$c['email'];
+    $kn      = CRM_PickString($c, ['address_no', 'customer_number', 'kundennummer', 'kunden_nummer', 'nr'], '');
+    $name    = CRM_PickString($c, ['name'], '');
+    $company = CRM_PickString($c, ['company', 'firma'], '');
+    $keyword = CRM_PickString($c, ['keyword'], '');
+    $city    = CRM_PickString($c, ['city', 'ort'], '');
 
-        $phonesRaw = [];
-        foreach ((array)($c['phones'] ?? []) as $p) $phonesRaw[] = $p;
-        if (isset($c['phone']) && is_string($c['phone']) && trim($c['phone']) !== '') $phonesRaw[] = (string)$c['phone'];
+    $street  = CRM_PickString($c, ['street', 'strasse'], '');
+    $plz     = CRM_PickString($c, ['postal_code', 'plz'], '');
+    $contact = CRM_PickString($c, ['contact_person', 'ansprechpartner'], '');
 
-        if ($q !== '' && isset($phoneMap[$q]) && (string)$phoneMap[$q] === $kn) {
-            $phonesRaw[] = $q;
-        }
+    $owner = CRM_PickString($c, ['owner_name', 'ownerName', 'owner', 'inhaber', 'inhaber_name', 'geschaeftsfuehrer', 'gf'], '');
+    $orderMail = CRM_PickString($c, ['order_email', 'auftragsmail'], '');
 
-        $phonesNorm = CRM_DedupePhones($phonesRaw);
+    $mail = '';
+    $emails = CRM_PickEmails($c);
+    if (isset($emails[0])) $mail = (string)$emails[0];
 
-        $fieldsLower = [
-            'kn'      => mb_strtolower($kn),
-            'name'    => mb_strtolower($name),
-            'company' => mb_strtolower($company),
-            'keyword' => mb_strtolower($keyword),
-            'city'    => mb_strtolower($city),
-            'mail'    => mb_strtolower($mail),
-        ];
+    $phonesRaw = [];
+    foreach ((array)($c['phones'] ?? []) as $p) $phonesRaw[] = $p;
+    $singlePhone = CRM_PickString($c, ['phone', 'telefon'], '');
+    if ($singlePhone !== '') $phonesRaw[] = $singlePhone;
 
-        $score = CRM_ScoreMatch($fieldsLower, $qLower) + CRM_ScorePhoneMatch($phonesNorm, $qPhone);
-        if ($score <= 0) continue;
-
-        $ranked[] = [
-            's'      => $score,
-            't'      => 'customer',
-            'phones' => $phonesNorm,
-            'kn'     => $kn,
-            'name'   => $name,
-            'company'=> $company,
-        ];
+    if ($q !== '' && isset($phoneMap[$q]) && (string)$phoneMap[$q] === $kn) {
+        $phonesRaw[] = $q;
     }
-}
 
-/* -----------------------------
-   M365 Kontakte: Ranking
-   ----------------------------- */
-if ($includeM365) {
-    $m365Json = CRM_LoadJsonFile(CFG_FILE_REQ('CONTACTS_JSON'), []);
-    $m365List = CRM_ExtractList($m365Json, ['items', 'contacts']);
+    $phonesNorm = CRM_DedupePhones($phonesRaw);
 
-    foreach ($m365List as $c) {
-        if (!is_array($c)) continue;
+    $fieldsLower = [
+        'kn'      => mb_strtolower($kn),
+        'name'    => mb_strtolower($name),
+        'company' => mb_strtolower($company),
+        'keyword' => mb_strtolower($keyword),
+        'city'    => mb_strtolower($city),
+        'mail'    => mb_strtolower($mail),
+    ];
 
-        $id      = (string)($c['id'] ?? $c['contactId'] ?? '');
-        $name    = (string)($c['displayName'] ?? $c['name'] ?? '');
-        $company = (string)($c['companyName'] ?? $c['company'] ?? '');
+    $score = CRM_ScoreMatch($fieldsLower, $qLower) + CRM_ScorePhoneMatch($phonesNorm, $qPhone);
+    if ($score <= 0) continue;
 
-        $mail = '';
-        if (isset($c['emailAddresses'][0]['address'])) $mail = (string)$c['emailAddresses'][0]['address'];
-        if ($mail === '' && isset($c['mail'])) $mail = (string)$c['mail'];
-        if ($mail === '' && isset($c['email'])) $mail = (string)$c['email'];
+    $ranked[] = [
+        's'          => $score,
+        'source'     => 'customer',
+        'id'         => null,
+        'customer_number' => $kn,
+        'name'        => $name,
+        'company'     => $company,
 
-        $phonesRaw = [];
-        foreach (['mobilePhone', 'homePhones', 'businessPhones', 'phones', 'phone'] as $k) {
-            if (!isset($c[$k])) continue;
-            if (is_string($c[$k]) && $c[$k] !== '') $phonesRaw[] = (string)$c[$k];
-            if (is_array($c[$k])) {
-                foreach ($c[$k] as $p) {
-                    if (is_string($p) && $p !== '') $phonesRaw[] = $p;
-                    if (is_array($p) && isset($p['number'])) $phonesRaw[] = (string)$p['number'];
-                }
-            }
-        }
-        $phonesNorm = CRM_DedupePhones($phonesRaw);
+        'street'      => $street,
+        'postal_code' => $plz,
+        'city'        => $city,
 
-        $fieldsLower = [
-            'kn'      => '',
-            'name'    => mb_strtolower($name),
-            'company' => mb_strtolower($company),
-            'keyword' => '',
-            'city'    => '',
-            'mail'    => mb_strtolower($mail),
-        ];
+        'contact_person' => $contact,
+        'owner_name'     => $owner,
+        'order_email'    => $orderMail,
 
-        $score = CRM_ScoreMatch($fieldsLower, $qLower) + CRM_ScorePhoneMatch($phonesNorm, $qPhone);
-        if ($score <= 0) continue;
-
-        $ranked[] = [
-            's'      => $score,
-            't'      => 'm365',
-            'phones' => $phonesNorm,
-            'id'     => $id,
-            'name'   => $name,
-            'company'=> $company,
-            'hasPhoto' => (bool)($c['hasPhoto'] ?? false),
-        ];
-    }
+        'emails'      => $emails,
+        'phones'      => $phonesNorm,
+        'keyword'     => $keyword,
+    ];
 }
 
 /* -----------------------------
@@ -239,34 +249,33 @@ foreach ($ranked as $r) {
     foreach (($r['phones'] ?? []) as $p) {
         $phones[] = ['number' => $p, 'label' => '', 'dial' => $p];
     }
-    $primary = $phones[0]['dial'] ?? null;
 
-    if (($r['t'] ?? '') === 'customer') {
-        $items[] = [
-            'source'          => 'customer',
-            'id'              => null,
-            'name'            => (string)($r['name'] ?? ''),
-            'company'         => (string)($r['company'] ?? ''),
-            'customer_number' => (string)($r['kn'] ?? ''),
-            'phones'          => $phones,
-            'primary_phone'   => $primary,
-            'avatar_url'      => null,
-        ];
-    } else {
-        $cid = (string)($r['id'] ?? '');
-        $hasPhoto = (bool)($r['hasPhoto'] ?? false);
+    $items[] = [
+        'source'          => 'customer',
+        'id'              => null,
 
-        $items[] = [
-            'source'          => 'm365',
-            'id'              => $cid !== '' ? $cid : null,
-            'name'            => (string)($r['name'] ?? ''),
-            'company'         => (string)($r['company'] ?? ''),
-            'customer_number' => null,
-            'phones'          => $phones,
-            'primary_phone'   => $primary,
-            'avatar_url'      => ($hasPhoto && $cid !== '') ? ('/cti/crm_cti_photo.php?contactId=' . rawurlencode($cid)) : null,
-        ];
-    }
+        'customer_number' => (string)($r['customer_number'] ?? ''),
+        'company'         => (string)($r['company'] ?? ''),
+        'name'            => (string)($r['name'] ?? ''),
+
+        'street'          => (string)($r['street'] ?? ''),
+        'postal_code'     => (string)($r['postal_code'] ?? ''),
+        'city'            => (string)($r['city'] ?? ''),
+
+        'phones'          => $phones,
+        'primary_phone'   => $phones[0]['dial'] ?? null,
+
+        'emails'          => array_values((array)($r['emails'] ?? [])),
+        'email'           => (string)(($r['emails'][0] ?? '') ?: ''),
+
+        'contact_person'  => (string)($r['contact_person'] ?? ''),
+        'owner_name'      => (string)($r['owner_name'] ?? ''),
+        'order_email'     => (string)($r['order_email'] ?? ''),
+
+        'keyword'         => (string)($r['keyword'] ?? ''),
+
+        'avatar_url'      => null,
+    ];
 
     if (count($items) >= $limit) break;
 }

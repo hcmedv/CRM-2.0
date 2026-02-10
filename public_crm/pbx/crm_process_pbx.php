@@ -18,8 +18,10 @@ declare(strict_types=1);
  *   - Fallback (alt): Extension (e0/e5/…) → User via mitarbeiter.json (cti.profiles.*.caller)
  */
 
+/*
 error_reporting(E_ALL);
 ini_set('display_errors', '1');
+*/
 
 if (!defined('CRM_ROOT')) {
     require_once __DIR__ . '/../../_inc/bootstrap.php';

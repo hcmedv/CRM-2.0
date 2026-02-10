@@ -4,21 +4,65 @@ declare(strict_types=1);
 /*
  * Datei: /public/events/index.php
  * Zweck:
- * - Modul "Events" (als Child unter Topnav "Vorgang")
- * - Kanban-Lanes (Offen/Bearbeitung) mit internem Scroll
- * - Overlay (System B) als einziges Detailfenster (kein legacy modal)
+ * - Modul "Events" (Child unter Topnav "Vorgang")
+ * - Lanes (Offen/Bearbeitung) mit internem Scroll
+ * - Overlay System B als einziges Detailfenster
+ * - TEST Step 2: PHP liefert echte Demo-Events (ohne API)
  */
 
 $MOD = 'events';
 
-define('CRM_PAGE_ACTIVE', 'vorgang');     // Topnav
-define('CRM_SUBNAV_ACTIVE', 'events');    // Subnav (children von vorgang)
+define('CRM_PAGE_ACTIVE', 'vorgang');
+define('CRM_SUBNAV_ACTIVE', 'events');
 
 require_once __DIR__ . '/../_inc/bootstrap.php';
 require_once CRM_ROOT . '/_inc/auth.php';
 CRM_Auth_RequireLogin();
 
 require_once CRM_ROOT . '/_inc/page_top.php';
+
+/* -------------------------------------------------------------------------------------------------
+   STEP 2: echte Demo-Daten aus PHP (später ersetzt durch Reader/API)
+   ------------------------------------------------------------------------------------------------- */
+$events = [
+    [
+        'event_id'  => 'evt-001',
+        'state'     => 'open',
+        'title'     => 'Office: Anmeldung / Passwort reset',
+        'meta'      => '02.02.2026 15:00 — Dauer 00:02:11',
+        'body_html' => '<div>Erster echter Inhalt aus PHP.<br>Notizen…<br>Weitere Zeilen…</div>',
+    ],
+    [
+        'event_id'  => 'evt-002',
+        'state'     => 'open',
+        'title'     => 'PBX: Rückruf Kunde ERKO',
+        'meta'      => '02.02.2026 16:10 — Dauer 00:05:42',
+        'body_html' => '<div>Telefonat geführt.<br>Kurzinfo…</div>',
+    ],
+    [
+        'event_id'  => 'evt-101',
+        'state'     => 'work',
+        'title'     => 'TeamViewer: Druckerproblem',
+        'meta'      => '03.02.2026 09:12 — Dauer 00:12:03',
+        'body_html' => '<div>In Bearbeitung.<br>Check Treiber/Spooler…</div>',
+    ],
+];
+
+/* Lane-Split */
+$laneOpen = [];
+$laneWork = [];
+$laneDone = [];
+$laneArchiv = [];
+$laneDeleted = [];
+
+foreach ($events as $e) {
+    $st = (string)($e['state'] ?? '');
+    if ($st === 'open') { $laneOpen[] = $e; continue; }
+    if ($st === 'work') { $laneWork[] = $e; continue; }
+    if ($st === 'done') { $laneDone[] = $e; continue; }
+    if ($st === 'archiv') { $laneArchiv[] = $e; continue; }
+    if ($st === 'deleted') { $laneDeleted[] = $e; continue; }
+}
 ?>
 
 <div class="grid grid--events">
@@ -27,7 +71,28 @@ require_once CRM_ROOT . '/_inc/page_top.php';
   <section class="card card--lane">
     <div class="card__title">Offen</div>
     <div class="card__body">
-      <div class="events-lane__scroll" id="events-list-open"></div>
+      <div class="events-lane__scroll" id="events-list-open">
+        <?php foreach ($laneOpen as $e):
+            $id    = (string)($e['event_id'] ?? '');
+            $title = (string)($e['title'] ?? '');
+            $meta  = (string)($e['meta'] ?? '');
+            $body  = (string)($e['body_html'] ?? '');
+        ?>
+          <a href="#"
+             class="event-item-link"
+             data-overlay-open
+             data-ov-id="<?= htmlspecialchars($id, ENT_QUOTES) ?>"
+             data-ov-title="<?= htmlspecialchars($title, ENT_QUOTES) ?>"
+             data-ov-meta="<?= htmlspecialchars($meta, ENT_QUOTES) ?>"
+             data-ov-body="<?= htmlspecialchars($body, ENT_QUOTES) ?>"
+             style="text-decoration:none;color:inherit;display:block;">
+            <div class="event-item">
+              <div class="event-item__title"><?= htmlspecialchars($title, ENT_QUOTES) ?></div>
+              <div class="event-item__meta"><?= htmlspecialchars($meta, ENT_QUOTES) ?></div>
+            </div>
+          </a>
+        <?php endforeach; ?>
+      </div>
     </div>
   </section>
 
@@ -35,26 +100,68 @@ require_once CRM_ROOT . '/_inc/page_top.php';
   <section class="card card--lane">
     <div class="card__title">Bearbeitung</div>
     <div class="card__body">
-      <div class="events-lane__scroll" id="events-list-work"></div>
+      <div class="events-lane__scroll" id="events-list-work">
+        <?php foreach ($laneWork as $e):
+            $id    = (string)($e['event_id'] ?? '');
+            $title = (string)($e['title'] ?? '');
+            $meta  = (string)($e['meta'] ?? '');
+            $body  = (string)($e['body_html'] ?? '');
+        ?>
+          <a href="#"
+             class="event-item-link"
+             data-overlay-open
+             data-ov-id="<?= htmlspecialchars($id, ENT_QUOTES) ?>"
+             data-ov-title="<?= htmlspecialchars($title, ENT_QUOTES) ?>"
+             data-ov-meta="<?= htmlspecialchars($meta, ENT_QUOTES) ?>"
+             data-ov-body="<?= htmlspecialchars($body, ENT_QUOTES) ?>"
+             style="text-decoration:none;color:inherit;display:block;">
+            <div class="event-item">
+              <div class="event-item__title"><?= htmlspecialchars($title, ENT_QUOTES) ?></div>
+              <div class="event-item__meta"><?= htmlspecialchars($meta, ENT_QUOTES) ?></div>
+            </div>
+          </a>
+        <?php endforeach; ?>
+      </div>
     </div>
   </section>
 
   <!-- D -->
   <section class="card card--wide">
     <div class="card__title">Erledigt</div>
-    <div class="card__body" id="events-list-done"></div>
+    <div class="card__body" id="events-list-done">
+      <?php foreach ($laneDone as $e): ?>
+        <div class="event-item">
+          <div class="event-item__title"><?= htmlspecialchars((string)($e['title'] ?? ''), ENT_QUOTES) ?></div>
+          <div class="event-item__meta"><?= htmlspecialchars((string)($e['meta'] ?? ''), ENT_QUOTES) ?></div>
+        </div>
+      <?php endforeach; ?>
+    </div>
   </section>
 
   <!-- E -->
   <section class="card card--wide">
     <div class="card__title">Archiv</div>
-    <div class="card__body" id="events-list-archiv"></div>
+    <div class="card__body" id="events-list-archiv">
+      <?php foreach ($laneArchiv as $e): ?>
+        <div class="event-item">
+          <div class="event-item__title"><?= htmlspecialchars((string)($e['title'] ?? ''), ENT_QUOTES) ?></div>
+          <div class="event-item__meta"><?= htmlspecialchars((string)($e['meta'] ?? ''), ENT_QUOTES) ?></div>
+        </div>
+      <?php endforeach; ?>
+    </div>
   </section>
 
   <!-- F -->
   <section class="card card--wide">
     <div class="card__title">Ausgeblendet / Gelöscht</div>
-    <div class="card__body" id="events-list-deleted"></div>
+    <div class="card__body" id="events-list-deleted">
+      <?php foreach ($laneDeleted as $e): ?>
+        <div class="event-item">
+          <div class="event-item__title"><?= htmlspecialchars((string)($e['title'] ?? ''), ENT_QUOTES) ?></div>
+          <div class="event-item__meta"><?= htmlspecialchars((string)($e['meta'] ?? ''), ENT_QUOTES) ?></div>
+        </div>
+      <?php endforeach; ?>
+    </div>
   </section>
 
 </div>
@@ -64,7 +171,10 @@ require_once CRM_ROOT . '/_inc/page_top.php';
 <div class="events-overlay" id="events-overlay" hidden>
   <div class="events-overlay__panel" role="dialog" aria-modal="true" aria-labelledby="events-overlay-title">
     <div class="events-overlay__head">
-      <div class="events-overlay__title" id="events-overlay-title">Event</div>
+      <div>
+        <div class="events-overlay__title" id="events-overlay-title">Event</div>
+        <div class="muted" id="events-overlay-meta" style="font-size:12px;"></div>
+      </div>
       <button class="events-overlay__close" type="button" data-overlay-close aria-label="Schließen">×</button>
     </div>
 
@@ -79,87 +189,51 @@ require_once CRM_ROOT . '/_inc/page_top.php';
 
 <script>
 (function(){
-  const ov = document.getElementById('events-overlay');
+  'use strict';
+
+  const ov      = document.getElementById('events-overlay');
   const ovTitle = document.getElementById('events-overlay-title');
+  const ovMeta  = document.getElementById('events-overlay-meta');
   const ovBody  = document.getElementById('events-overlay-content');
   const ovStat  = document.getElementById('events-overlay-status');
 
-  function FN_OverlayOpen(title, html, statusText)
-  {
+  function overlayOpen(title, meta, html, statusText){
     if (!ov) return;
     if (ovTitle) ovTitle.textContent = String(title || 'Event');
-    if (ovBody)  ovBody.innerHTML = String(html || '');
-    if (ovStat)  ovStat.textContent = String(statusText || 'Speichern nur über Status.');
+    if (ovMeta)  ovMeta.textContent  = String(meta || '');
+    if (ovBody)  ovBody.innerHTML    = String(html || '');
+    if (ovStat)  ovStat.textContent  = String(statusText || 'Speichern nur über Status.');
     ov.hidden = false;
   }
 
-  function FN_OverlayClose()
-  {
+  function overlayClose(){
     if (!ov) return;
     ov.hidden = true;
   }
 
   document.addEventListener('click', function(e){
-    const closeBtn = e.target && e.target.closest ? e.target.closest('[data-overlay-close]') : null;
-    if (closeBtn) {
+    const closeBtn = e.target.closest('[data-overlay-close]');
+    if (closeBtn){
       e.preventDefault();
-      FN_OverlayClose();
+      overlayClose();
       return;
     }
 
-    const openEl = e.target && e.target.closest ? e.target.closest('[data-overlay-open]') : null;
-    if (openEl) {
+    const openEl = e.target.closest('[data-overlay-open]');
+    if (openEl){
       e.preventDefault();
-      const title  = openEl.getAttribute('data-ov-title') || 'Event';
-      const body   = openEl.getAttribute('data-ov-body')  || '';
-      const status = openEl.getAttribute('data-ov-status') || 'Speichern nur über Status.';
-      FN_OverlayOpen(title, body, status);
+      overlayOpen(
+        openEl.getAttribute('data-ov-title') || 'Event',
+        openEl.getAttribute('data-ov-meta')  || '',
+        openEl.getAttribute('data-ov-body')  || '',
+        'Speichern nur über Status.'
+      );
     }
   });
 
   document.addEventListener('keydown', function(e){
-    if (e.key === 'Escape') FN_OverlayClose();
+    if (e.key === 'Escape') overlayClose();
   });
-
-  // Test-Filler (nur Layout)
-  function fill(sel, n, label){
-    const el = document.querySelector(sel);
-    if(!el) return;
-
-    const items = [];
-    for(let i=1;i<=n;i++){
-      const title = label + ' #' + i;
-      const body  =
-        '<div style="line-height:1.5;">'
-        + '<div style="font-weight:700;margin-bottom:6px;">' + title + '</div>'
-        + '<div style="opacity:.8;font-size:12px;margin-bottom:10px;">02.02.2026 15:00 — Dauer 00:02:11</div>'
-        + '<div>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br></div>'
-        + '<div>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br></div>'
-        + '<div>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br></div>'
-        + '<div>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br></div>'
-        + '<div>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br>Inhalt<br></div>'
-        + '</div>';
-
-      items.push(
-        '<a href="#" data-overlay-open '
-        + 'data-ov-title="' + title.replace(/"/g,'&quot;') + '" '
-        + 'data-ov-body="'  + body.replace(/"/g,'&quot;').replace(/\n/g,'') + '" '
-        + 'style="text-decoration:none;color:inherit;display:block;">'
-        +   '<div style="padding:8px 10px;border:1px solid rgba(0,0,0,.08);border-radius:10px;margin:8px 0;background:#fff;">'
-        +     '<div style="font-weight:700;">'+title+'</div>'
-        +     '<div style="opacity:.7;font-size:12px;">02.02.2026 15:00 — Dauer 00:02:11</div>'
-        +   '</div>'
-        + '</a>'
-      );
-    }
-    el.innerHTML = items.join('');
-  }
-
-  fill('#events-list-open', 18, 'Offen');
-  fill('#events-list-work', 14, 'Bearbeitung');
-  fill('#events-list-done', 6, 'Erledigt');
-  fill('#events-list-archiv', 4, 'Archiv');
-  fill('#events-list-deleted', 3, 'Gelöscht');
 })();
 </script>
 
