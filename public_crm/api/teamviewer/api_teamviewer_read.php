@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /*
- * Datei: /public_crm/api/system/api_teamviewer_read.php
+ * Datei: /public_crm/api/teamviewer/api_teamviewer_read.php
  *
  * Zweck:
  * - TeamViewer Connections via API abrufen (RAW)
@@ -19,6 +19,9 @@ declare(strict_types=1);
  * - RAW Format ist verbindlich:
  *   { fetched_at, request:{...}, data:{ records:[...] } }
  */
+
+define('CRM_IS_API', true);
+define('CRM_AUTH_REQUIRED', false);
 
 require_once __DIR__ . '/../../_inc/bootstrap.php';
 

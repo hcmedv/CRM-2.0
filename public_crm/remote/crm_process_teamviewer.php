@@ -11,6 +11,19 @@ declare(strict_types=1);
  * - Baut Patches via rules_teamviewer.php
  * - Reicht an via rules_common.php + rules_enrich.php (wie PBX)
  * - Upsert in Events-Store via Writer
+ *
+ * WICHTIG (Touch-Problem):
+ * - Abgeschlossene (ended_at) Sessions sollen NICHT bei jedem Poll erneut upsertet werden,
+ *   weil sonst updated_at alter Events "hochgezogen" wird.
+ *
+ * Erkenntnis:
+ * - CRM_Events_IndexByRef() existiert nicht (Call to undefined function).
+ * - Deshalb KEIN vorab Index-Build, sondern direkte Reader-Abfrage pro Session:
+ *     CRM_Events_GetByRef('teamviewer', <session_id>)
+ *   Wenn Event existiert UND ended_at identisch ist -> SKIP.
+ *
+ * DIAG:
+ * - Liefert IMMER session_outcomes (upserted/skipped/errored) mit session_id + ref_id + ended_at.
  */
 
 require_once __DIR__ . '/../_inc/bootstrap.php';
@@ -60,6 +73,19 @@ function TVP_ReadJson(string $file, array $default = []): array
     return is_array($j) ? $j : $default;
 }
 
+function TVP_GetRefId(array $patch, string $ns): string
+{
+    $refs = (isset($patch['refs']) && is_array($patch['refs'])) ? $patch['refs'] : [];
+    foreach ($refs as $r) {
+        if (!is_array($r)) { continue; }
+        if ((string)($r['ns'] ?? '') === $ns) {
+            $id = trim((string)($r['id'] ?? ''));
+            if ($id !== '') { return $id; }
+        }
+    }
+    return '';
+}
+
 /* ---------------- Data Path ---------------- */
 
 $dataBaseDir = CRM_MOD_PATH($MOD, 'data');
@@ -69,21 +95,16 @@ if ($dataBaseDir === '') {
 
 /* ---------------- Load RAW (fixed schema) ---------------- */
 
-// Primär: In-Memory Payload aus api_teamviewer_read.php
 $raw     = [];
 $rawFile = null;
 
 if (isset($GLOBALS['CRM_TV_POLL_PAYLOAD']) && is_array($GLOBALS['CRM_TV_POLL_PAYLOAD'])) {
     $raw = (array)$GLOBALS['CRM_TV_POLL_PAYLOAD'];
 } else {
-    // Fallback (Debug): Datei aus raw_store.* (nur wenn vorhanden)
     $rawStore = (array)CRM_MOD_CFG($MOD, 'raw_store', []);
     $fileName = (string)($rawStore['filename_current'] ?? 'teamviewer_raw_current.json');
 
-    // CRM_MOD_PATH('teamviewer','data') ist bereits /data/teamviewer/
-    // => kein data_dir nochmals anhängen
     $rawFile = rtrim($dataBaseDir, '/') . '/' . $fileName;
-
     $raw = TVP_ReadJson($rawFile, []);
 }
 
@@ -126,11 +147,17 @@ if (!function_exists('RULES_TEAMVIEWER_BuildPatch')) {
     TVP_Out(['ok' => false, 'error' => 'rules_missing_entrypoint'], 500);
 }
 
-TVP_Log($MOD, 'rules_loaded', [
-    'teamviewer' => $rulesTeamviewer,
-    'common'     => $rulesCommon,
-    'enrich'     => $rulesEnrich,
-]);
+/* ---------------- Reader (Read-Only) ---------------- */
+
+$readerLib = CRM_ROOT . '/_lib/events/crm_events_read.php';
+if (!is_file($readerLib)) {
+    TVP_Out(['ok' => false, 'error' => 'reader_missing', 'file' => $readerLib], 500);
+}
+require_once $readerLib;
+
+if (!function_exists('CRM_Events_GetByRef')) {
+    TVP_Out(['ok' => false, 'error' => 'reader_missing_getbyref'], 500);
+}
 
 /* ---------------- Writer ---------------- */
 
@@ -144,23 +171,24 @@ if (!class_exists('CRM_EventGenerator') || !method_exists('CRM_EventGenerator', 
     TVP_Out(['ok' => false, 'error' => 'writer_invalid'], 500);
 }
 
-TVP_Log($MOD, 'process_start', [
-    'records'  => $records,
-    'raw_file' => $rawFile,
-]);
-
 /* ---------------- Process ---------------- */
 
 $upserts = 0;
 $errors  = 0;
-$errorSamples = [];
+$skips   = 0;
+
 $previewFirstPatch = null;
+
+$sessionOutcomes = [
+    'upserted' => [],
+    'skipped'  => [],
+    'errored'  => [],
+];
 
 foreach ($items as $row) {
     if (!is_array($row)) { continue; }
 
-    $rowId    = (string)($row['id'] ?? '');
-    $deviceId = (string)($row['deviceid'] ?? $row['deviceId'] ?? '');
+    $rowId = (string)($row['id'] ?? '');
 
     try {
         $patch = RULES_TEAMVIEWER_BuildPatch($row);
@@ -181,56 +209,84 @@ foreach ($items as $row) {
             $previewFirstPatch = $patch;
         }
 
+        $sid      = TVP_GetRefId($patch, 'teamviewer');            // fachliche Session-ID (Ref)
+        $endPatch = (int)($patch['timing']['ended_at'] ?? 0);
+
+        // Skip-Logik: existiert + ended_at identisch (keine updated_at-Touches bei fertigen Sessions)
+        if ($sid !== '' && $endPatch > 0) {
+            $existingEvent = null;
+
+            try {
+                $existingEvent = CRM_Events_GetByRef('teamviewer', $sid);
+            } catch (Throwable $e) {
+                $existingEvent = null;
+                TVP_Log($MOD, 'reader_getbyref_failed', ['sid' => $sid, 'message' => $e->getMessage()]);
+            }
+
+            if (is_array($existingEvent)) {
+                $endExisting = 0;
+                if (isset($existingEvent['timing']) && is_array($existingEvent['timing'])) {
+                    $endExisting = (int)($existingEvent['timing']['ended_at'] ?? 0);
+                }
+
+                if ($endExisting > 0 && $endExisting === $endPatch) {
+                    $skips++;
+                    $sessionOutcomes['skipped'][] = [
+                        'session_id' => $rowId,
+                        'ref_id'     => $sid,
+                        'ended_at'   => $endPatch,
+                        'event_id'   => (string)($existingEvent['event_id'] ?? ''),
+                        'reason'     => 'ended_at_unchanged',
+                    ];
+                    continue;
+                }
+            }
+        }
+
         $res = CRM_EventGenerator::upsert('teamviewer', 'remote', $patch);
 
         if (is_array($res) && ($res['ok'] ?? false)) {
             $upserts++;
+            $sessionOutcomes['upserted'][] = [
+                'session_id' => $rowId,
+                'ref_id'     => $sid,
+                'ended_at'   => $endPatch,
+                'event_id'   => (string)($res['event_id'] ?? ''),
+                'written'    => (bool)($res['written'] ?? false),
+                'is_new'     => (bool)($res['is_new'] ?? false),
+            ];
         } else {
             $errors++;
-
-            if (TVP_IsDebug($MOD) && count($errorSamples) < 5) {
-                $errorSamples[] = [
-                    'row_id'    => $rowId,
-                    'deviceid'  => $deviceId,
-                    'error'     => is_array($res) ? (string)($res['error'] ?? 'writer_failed') : 'writer_failed',
-                    'message'   => is_array($res) ? (string)($res['message'] ?? '') : '',
-                    'ctx'       => is_array($res) ? $res : null,
-                ];
-            }
+            $sessionOutcomes['errored'][] = [
+                'session_id' => $rowId,
+                'ref_id'     => $sid,
+                'ended_at'   => $endPatch,
+                'error'      => is_array($res) ? (string)($res['error'] ?? 'writer_failed') : 'writer_failed',
+                'message'    => is_array($res) ? (string)($res['message'] ?? '') : '',
+            ];
         }
 
     } catch (Throwable $e) {
         $errors++;
-
-        if (TVP_IsDebug($MOD) && count($errorSamples) < 5) {
-            $errorSamples[] = [
-                'row_id'    => $rowId,
-                'deviceid'  => $deviceId,
-                'error'     => 'exception',
-                'message'   => $e->getMessage(),
-            ];
-        }
-
+        $sessionOutcomes['errored'][] = [
+            'session_id' => $rowId,
+            'ref_id'     => '',
+            'ended_at'   => 0,
+            'error'      => 'exception',
+            'message'    => $e->getMessage(),
+        ];
         continue;
     }
 }
-
-TVP_Log($MOD, 'process_done', [
-    'records' => $records,
-    'upserts' => $upserts,
-    'errors'  => $errors,
-]);
 
 $out = [
     'ok'                  => true,
     'records'             => $records,
     'upserts'             => $upserts,
+    'skips'               => $skips,
     'errors'              => $errors,
+    'session_outcomes'    => $sessionOutcomes,
     'preview_first_patch' => $previewFirstPatch,
 ];
-
-if (TVP_IsDebug($MOD)) {
-    $out['error_samples'] = $errorSamples;
-}
 
 TVP_Out($out);

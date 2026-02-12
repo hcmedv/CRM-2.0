@@ -64,13 +64,11 @@
           <button class="cti2-phone" data-dial="${dial}" type="button">${dial}</button>
         </div>
       </div>
-      <div class="cti2-status" id="cti2-status">
-        <span class="cti2-status__text"></span>
-      </div>
     `;
 
     list.appendChild(el);
   };
+
 
   const renderResults = (items) => {
     (items || []).forEach(it => {

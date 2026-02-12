@@ -82,34 +82,99 @@ function PBX_Process(array $pbx): array
     $patch = FN_PBX_MergeTimingAgainstExistingEvent($patch);
 
     // 4) Writer
-    try {
-        if (!class_exists('CRM_EventGenerator')) {
-            return ['ok' => false, 'error' => 'writer_class_missing'];
-        }
+// 4) Writer
+try {
+    if (!class_exists('CRM_EventGenerator')) {
+        return ['ok' => false, 'error' => 'writer_class_missing'];
+    }
 
-        $r = CRM_EventGenerator::upsert('pbx', 'call', $patch);
+    $r = CRM_EventGenerator::upsert('pbx', 'call', $patch);
 
-        if (!is_array($r) || ($r['ok'] ?? false) !== true) {
-            return [
-                'ok'    => false,
-                'error' => (string)($r['error'] ?? 'writer_failed'),
-                'ctx'   => $r,
+    if (!is_array($r) || ($r['ok'] ?? false) !== true) {
+
+        // Fail-Log (PBX) – damit Writer/Validator-Fehler sichtbar werden
+        $logDir = rtrim((string)CRM_MOD_PATH('pbx', 'log'), '/');
+        if ($logDir !== '') {
+            if (!is_dir($logDir)) { @mkdir($logDir, 0775, true); }
+
+            $file = $logDir . '/process_' . date('Y-m-d') . '.log';
+
+            $callId = (string)($patch['meta']['pbx']['call_id'] ?? '');
+            $callId = trim($callId);
+
+            $row = [
+                'ts'      => date('c'),
+                'level'   => 'error',
+                'msg'     => 'writer_failed',
+                'error'   => (string)($r['error'] ?? 'writer_failed'),
+                'call_id' => $callId,
+                'ctx'     => $r,
+                'patch'   => [
+                    'event_source' => (string)($patch['event_source'] ?? ''),
+                    'event_type'   => (string)($patch['event_type'] ?? ''),
+                    'has_workflow' => (bool)(isset($patch['workflow']) && is_array($patch['workflow'])),
+                    'workflow'     => (array)($patch['workflow'] ?? []),
+                    'has_timing'   => (bool)(isset($patch['timing']) && is_array($patch['timing'])),
+                    'timing'       => (array)($patch['timing'] ?? []),
+                    'refs'         => (array)($patch['refs'] ?? []),
+                ],
             ];
-        }
 
-        $evt = $r['event'] ?? null;
-        $eventId = is_array($evt) ? (string)($evt['event_id'] ?? '') : '';
+            @file_put_contents(
+                $file,
+                json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
+                FILE_APPEND
+            );
+        }
 
         return [
-            'ok'       => true,
-            'event_id' => $eventId,
-            'written'  => (bool)($r['written'] ?? true),
-            'created'  => (bool)($r['is_new'] ?? false),
+            'ok'    => false,
+            'error' => (string)($r['error'] ?? 'writer_failed'),
+            'ctx'   => $r,
         ];
+    }
+
+    $evt = $r['event'] ?? null;
+    $eventId = is_array($evt) ? (string)($evt['event_id'] ?? '') : '';
+
+    return [
+        'ok'       => true,
+        'event_id' => $eventId,
+        'written'  => (bool)($r['written'] ?? true),
+        'created'  => (bool)($r['is_new'] ?? false),
+    ];
 
     } catch (Throwable $e) {
+
+        // Exception-Log (PBX)
+        $logDir = rtrim((string)CRM_MOD_PATH('pbx', 'log'), '/');
+        if ($logDir !== '') {
+            if (!is_dir($logDir)) { @mkdir($logDir, 0775, true); }
+
+            $file = $logDir . '/process_' . date('Y-m-d') . '.log';
+
+            $callId = (string)($patch['meta']['pbx']['call_id'] ?? '');
+            $callId = trim($callId);
+
+            $row = [
+                'ts'      => date('c'),
+                'level'   => 'error',
+                'msg'     => 'writer_exception',
+                'call_id' => $callId,
+                'type'    => get_class($e),
+                'message' => $e->getMessage(),
+            ];
+
+            @file_put_contents(
+                $file,
+                json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
+                FILE_APPEND
+            );
+        }
+
         return ['ok' => false, 'error' => 'exception', 'message' => $e->getMessage()];
     }
+
 }
 
 /* ===================================================================================================================== */

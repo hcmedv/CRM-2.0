@@ -99,6 +99,11 @@ function RULES_PBX_BuildPatch(array $pbx): array
         'event_source' => 'pbx',
         'event_type'   => 'call',
 
+        // 🔴 PFLICHT (v2): fachlicher Zustand ist NICHT trigger-abhängig
+        'workflow' => [
+            'state' => 'open',
+        ],
+
         'display' => [
             'title'    => $title,
             'subtitle' => $subtitle,
@@ -136,6 +141,7 @@ function RULES_PBX_BuildPatch(array $pbx): array
 
     return $patch;
 }
+
 
 
 /* ===================================================================================================================== */

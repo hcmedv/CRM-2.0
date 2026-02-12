@@ -411,6 +411,7 @@ function CRM_SessionDestroyAndExit(): void
 
 function CRM_SessionGuard(): void
 {
+
     $now = time();
 
     require_once CRM_ROOT . '/_inc/crm_user_context.php';
@@ -466,6 +467,8 @@ error_log('[DBG] uri=' . ($_SERVER['REQUEST_URI'] ?? '') .
     ' docroot=' . ($_SERVER['DOCUMENT_ROOT'] ?? '') .
     ' isApi=' . (CRM_IsApiRequest() ? '1' : '0')
 );
+
+
 CRM_SessionGuard();
 
 ######## JSON Datei einlesen ############################################################################################################

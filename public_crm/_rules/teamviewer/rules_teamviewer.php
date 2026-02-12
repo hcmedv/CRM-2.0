@@ -9,6 +9,16 @@ declare(strict_types=1);
  * - KN best-effort aus groupname/notes/description (#10032 | KN 10032)
  * - AdHoc-Erkennung: support_session_type=1 und kein devicename/groupname -> _norm.support_type="adhoc"
  *
+ * Erkenntnisse / Regeln (Stand: 2026-02):
+ * - Refs dienen nur der Idempotenz/Upsert (stabile Primär-Referenz).
+ * - refs.ns="teamviewer_device" wird NICHT mehr geschrieben:
+ *   - deviceid bleibt ausschließlich in meta.teamviewer._norm.deviceid (für spätere Zuordnung/Mapping),
+ *   - verhindert unbeabsichtigte Kollisionen/Merges über Geräte-Refs bei wechselnden/unklaren Sessions.
+ * - Tag/Notes Normalisierung:
+ *   - Tag-Zeile nur wenn erste Zeile mindestens ein '#' enthält
+ *   - Wenn keine Tag-Zeile: komplette Notes bleiben Notes
+ *   - Wenn Tag-Zeile: Notes sind nur Zeile 2+
+ *
  * Hinweis:
  * - Customer/Contact-Anreicherung (kunden.json / contacts.json / phone_map / teamviewer_adhoc_map)
  *   passiert NICHT hier, sondern zentral in rules_enrich.php (RULES_ENRICH_Apply()).
@@ -49,7 +59,7 @@ function RULES_TEAMVIEWER_BuildPatch(array $tv): array
     }
 
     // KN Extraktion (best-effort): "#10032" oder "KN 10032"
-    $kn = null;
+    $kn  = null;
     $hay = $group . "\n" . $notesRaw . "\n" . (string)($tv['description'] ?? '');
     if (preg_match('/(?:#|kn\s*)(\d{4,6})/i', $hay, $m)) {
         $kn = (string)($m[1] ?? '');
@@ -137,17 +147,22 @@ function RULES_TEAMVIEWER_BuildPatch(array $tv): array
     $displayTags = ['teamviewer'];
     $displayTags = array_values(array_unique($displayTags));
 
-    // Refs (Idempotenz) + deviceid als 2. Ref (stabil für AdHoc-Mapping)
+    // Refs (Idempotenz): NUR Session-ID (ns=teamviewer)
     $sid = (string)($tv['id'] ?? $tv['sessionId'] ?? '');
     $did = (string)($tv['deviceid'] ?? $tv['deviceId'] ?? '');
 
     $refs = [];
     if (trim($sid) !== '') { $refs[] = ['ns' => 'teamviewer', 'id' => trim($sid)]; }
-    if (trim($did) !== '') { $refs[] = ['ns' => 'teamviewer_device', 'id' => trim($did)]; }
 
     $patch = [
         'event_source' => 'teamviewer',
         'event_type'   => 'remote',
+
+        // 🔴 PFLICHT (v2): fachlicher Zustand ist NICHT trigger-abhängig
+        'workflow' => [
+            'state' => 'open',
+        ],
+
         'display' => [
             'title'    => $title,
             'subtitle' => '',

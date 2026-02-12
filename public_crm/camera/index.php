@@ -89,10 +89,9 @@ require_once CRM_ROOT . '/_inc/page_top.php';
             <option value="2560x1440">2560×1440 (QHD)</option>
           </select>
 
-          <button class="crm-btn" type="button" id="cam_start">Kamera starten</button>
-
-          <button class="crm-btn" type="button" id="cam_stop" disabled>Kamera stoppen</button>
-          <button class="crm-btn crm-btn-primary" type="button" id="cam_snap" disabled>Foto aufnehmen</button>
+          <button class="crm-btn" type="button" id="cam_start">Start</button>
+          <button class="crm-btn crm-btn-primary" type="button" id="cam_snap" disabled>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Aufnahme&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</button>
+          <button class="crm-btn" type="button" id="cam_stop" disabled>Stop</button>
         </div>
 
         <div class="muted" id="cam_status">Kamera: aus</div>
@@ -107,8 +106,8 @@ require_once CRM_ROOT . '/_inc/page_top.php';
 
         <div class="cam_actions cam_actions--top">
           <button class="crm-btn crm-btn-pPrimary" type="button" id="cam_doc" disabled>Dokumentieren</button>
-          <button class="crm-btn" type="button" id="cam_upload" disabled>Fotos hochladen</button>
-          <button class="crm-btn btnDanger" type="button" id="cam_clear" disabled>Änderungen verwerfen</button>
+          <button class="crm-btn" type="button" id="cam_upload" disabled>Hochladen</button>
+          <button class="crm-btn btnDanger" type="button" id="cam_clear" disabled>Verwerfen</button>
 
           <div class="cam_spacer"></div>
           <div class="muted"><span id="cam_queue_info">Fotos: 0</span></div>

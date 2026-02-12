@@ -12,6 +12,7 @@ declare(strict_types=1);
     online/auto => online
 */
 
+define('CRM_MODULE', 'login');
 header('Content-Type: application/json; charset=utf-8');
 
 $BASE = dirname(__DIR__, 4); // /public_service/api/user -> Projekt-Root

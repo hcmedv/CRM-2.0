@@ -75,6 +75,11 @@
   gap:8px;
 }
 
+.cti2-l1--row .cti2-chip{
+  margin-left:auto;
+  flex:0 0 auto;
+}
+
 .cti2-ellipsis{
   min-width:0;
   flex:1 1 auto;

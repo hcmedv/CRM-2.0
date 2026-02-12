@@ -1,10 +1,23 @@
 /* =================================================================================================
    CRM 2.0 – BERICHT EINSATZ MODULE
    Datei: crm_bericht_einsatz.css
+   Sprungmarken:
+   - [BE-0100] Card Wrapper
+   - [BE-0200] Kunde / Autocomplete
+   - [BE-0300] Meta (Allgemein)
+   - [BE-0400] Datensicherung
+   - [BE-0500] Textareas
+   - [BE-0600] Signatur
+   - [BE-0700] Actions / Block-Layout (rechts Buttons)
+   - [BE-0800] Einsatzzeiten (Desktop/Mobile)
+   - [BE-0900] Tätigkeiten (Desktop/Mobile)
+   - [BE-1000] Material (Desktop/Mobile)
+   - [BE-1100] Abnahme
 ================================================================================================= */
 
+
 /* =================================================================================================
-   1) CARD WRAPPER
+   [BE-0100] CARD WRAPPER
 ================================================================================================= */
 
 .be_card{
@@ -18,7 +31,7 @@
 
 
 /* =================================================================================================
-   2) CUSTOMER (Chip + Input) + AUTOCOMPLETE LAYERING
+   [BE-0200] CUSTOMER (Chip + Input) + AUTOCOMPLETE
 ================================================================================================= */
 
 .be_row{
@@ -53,19 +66,16 @@
   flex:0 0 auto;
 }
 
-/* Korrekt: im HTML heißt das Feld be_kunde_firma (nicht be_customer_q) */
 #be_kunde_firma{
   flex:1 1 auto;
   min-width:220px;
 }
 
-/* Autocomplete-Wrapper als Stacking Context */
 .be_card .autocomplete{
   position:relative;
-  z-index:1200; /* über Cards/Flyouts, unter CTI (10000) */
+  z-index:1200; /* über Cards/Flyouts, unter CTI */
 }
 
-/* Suggest-Flyout (nur modulbezogen – kein globales .suggest überschreiben) */
 .be_card .crm-suggest{
   position:absolute;
   left:0;
@@ -76,70 +86,8 @@
 
 
 /* =================================================================================================
-   3) META (Datum | h/km | Mitarbeiter) – responsive
+   [BE-0300] META (Allgemein) – responsive
 ================================================================================================= */
-
-.be_meta{
-  display:grid;
-  grid-template-columns: 220px 260px 1fr;
-  gap:14px;
-  align-items:end;
-}
-
-/* h/km inputs */
-.be_timekm_grid{
-  display:grid;
-  grid-template-columns: 1fr 1fr;
-  gap:10px;
-}
-
-.be_timekm_item{
-  display:flex;
-  flex-direction:column;
-  gap:4px;
-}
-
-/* Mitarbeiter rechts begrenzen (Desktop) */
-.be_meta__employee{
-  justify-self:end;
-}
-
-.be_meta__employee #be_employee{
-  width:420px;
-  max-width:100%;
-}
-
-/* Labels über h/km kompakter */
-.be_meta__timekm_labels .label{
-  margin:0;
-  line-height:1.15;
-}
-
-.be_meta__timekm_labels .label + .label{
-  margin-top:2px;
-  opacity:.85;
-}
-
-/* Tablet: 2 Spalten, Mitarbeiter unter Datum/hkm */
-@media (max-width: 980px){
-  .be_meta{
-    grid-template-columns: 1fr 1fr;
-  }
-  .be_meta__employee{
-    grid-column: 1 / -1;
-    justify-self:stretch;
-  }
-  .be_meta__employee #be_employee{
-    width:100%;
-  }
-}
-
-/* Handy: alles untereinander */
-@media (max-width: 520px){
-  .be_meta{
-    grid-template-columns: 1fr;
-  }
-}
 
 .be_meta--allg{
   display:grid;
@@ -160,8 +108,9 @@
   }
 }
 
+
 /* =================================================================================================
-   4) DATENSICHERUNG – Choices untereinander
+   [BE-0400] DATENSICHERUNG – Choices
 ================================================================================================= */
 
 .be_choices{
@@ -183,7 +132,7 @@
 
 
 /* =================================================================================================
-   5) TEXTAREAS
+   [BE-0500] TEXTAREAS
 ================================================================================================= */
 
 .be_textarea{
@@ -193,50 +142,7 @@
 
 
 /* =================================================================================================
-   6) EINSATZ / TÄTIGKEITEN / MATERIAL – Row Layout Helper
-================================================================================================= */
-
-.be_line{
-  display:grid;
-  grid-template-columns: 160px 110px 110px 140px 1fr 34px; /* date | start | end | min | mitarbeiter | x */
-  gap:10px;
-  align-items:end;
-}
-
-.be_line__del{
-  display:flex;
-  justify-content:center;
-  align-items:center;
-}
-
-/* Material: artno | text | qty | unit | x */
-.be_matline{
-  display:grid;
-  grid-template-columns: 160px 1fr 110px 120px 34px;
-  gap:10px;
-  align-items:end;
-}
-
-/* Tätigkeiten: text | x */
-.be_taskline{
-  display:grid;
-  grid-template-columns: 1fr 34px;
-  gap:10px;
-  align-items:end;
-}
-
-/* Mobile: alles untereinander */
-@media (max-width: 720px){
-  .be_line,
-  .be_matline,
-  .be_taskline{
-    grid-template-columns: 1fr;
-  }
-}
-
-
-/* =================================================================================================
-   7) SIGNATURE CANVAS
+   [BE-0600] SIGNATURE CANVAS
 ================================================================================================= */
 
 .be_sig{
@@ -246,12 +152,12 @@
   background:#fff;
   border:1px solid rgba(0,0,0,.15);
   touch-action:none;
-  max-height:200px; /* optisch niedriger */
+  max-height:200px;
 }
 
 
 /* =================================================================================================
-   8) ACTIONS
+   [BE-0700] ACTIONS + BLOCK-LAYOUT (rechts Buttons)
 ================================================================================================= */
 
 .be_actions{
@@ -259,77 +165,261 @@
   gap:10px;
   flex-wrap:wrap;
   align-items:center;
-  margin-top:10px;            /* <= Abstand nach oben */
+  margin-top:10px;
+}
+
+.be_actions--sum{
+  margin-top:8px;
 }
 
 .be_spacer{
   flex:1 1 auto;
 }
 
-/* ===================== Einsatzzeiten ===================== */
+/* Block: links Inhalt, rechts Action-Spalte (+) */
+.be_block{
+  display:grid;
+  grid-template-columns: 1fr 44px;
+  gap:10px;
+  align-items:start;
+}
+
+.be_block__side{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  justify-content:flex-start;
+  align-items:flex-end;
+  padding-top: 28px; /* Desktop: optisch auf Höhe der Einsatz-Inputs */
+}
+
+@media (max-width: 720px){
+  .be_block__side{
+    padding-top: 0; /* Mobile: kein Label-Offset */
+  }
+}
+
+/* Stundenanzeige neben Minuten */
+.be_sum_hours{
+  margin-left:6px;
+  color:#777;
+  white-space:nowrap;
+}
+
+
+/* =================================================================================================
+   [BE-0800] EINSATZZEITEN (Desktop/Mobile)
+================================================================================================= */
 
 .be_e_head,
 .be_e_row{
   display:grid;
-  grid-template-columns: 180px 120px 120px 160px 1fr 44px;
+  grid-template-columns: 160px 96px 96px 84px 1fr 38px; /* Datum | Beginn | Ende | Min | Mitarbeiter | X */
   gap:10px;
   align-items:center;
 }
 
 .be_e_head{
-  font-size: 12px;
+  font-size:12px;
   color:#666;
   margin: 6px 0 8px;
 }
 
-.be_e_row .be_e_cell{ min-width:0; }   /* wichtig für 1fr */
-.be_e_row .input{ width:100%; }
+.be_e_row .be_e_cell{
+  min-width:0;
+}
 
-/* ===================== Tätigkeiten ===================== */
+.be_e_row .input{
+  width:100%;
+}
+
+/* Einsatzzeit (min) schmal + rechtsbündig */
+.be_e_durcell .be_e_dur{
+  text-align:right;
+  padding-right:10px;
+}
+
+/* X mittig */
+.be_e_row .be_e_delcell{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+/* Mobile: 2 Zeilen, X rechts über beide Zeilen */
+@media (max-width: 720px){
+
+  .be_e_head{
+    display:none;
+  }
+
+  .be_e_row{
+    grid-template-columns: 1.35fr .95fr .95fr .85fr 38px; /* date | start | end | min | x */
+    grid-auto-rows:auto;
+    align-items:center;
+  }
+
+  .be_e_row .be_e_date{        grid-column:1/2; grid-row:1; }
+  .be_e_row .be_e_startcell{   grid-column:2/3; grid-row:1; }
+  .be_e_row .be_e_endcell{     grid-column:3/4; grid-row:1; }
+  .be_e_row .be_e_durcell{     grid-column:4/5; grid-row:1; }
+  .be_e_row .be_e_mitcell{     grid-column:1/5; grid-row:2; }
+
+  .be_e_row .be_e_delcell{
+    grid-column:5/6;
+    grid-row:1/3;
+    align-self:stretch;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+}
+
+
+/* =================================================================================================
+   [BE-0900] TÄTIGKEITEN (Desktop/Mobile)
+================================================================================================= */
 
 .be_t_row{
   display:grid;
-  grid-template-columns: 1fr 44px;
+  grid-template-columns: 1fr 38px;
   gap:10px;
   align-items:center;
 }
-.be_t_row .input{ width:100%; }
 
-/* ===================== Material ===================== */
+.be_t_row .input{
+  width:100%;
+}
+
+.be_t_row .be_t_del{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+/* Mobile: bleibt 2-spaltig (Input + X) */
+@media (max-width: 720px){
+  .be_t_row{
+    grid-template-columns: 1fr 38px;
+    align-items:start;
+  }
+
+  .be_t_row .be_t_del{
+    align-self:stretch;
+  }
+}
+
+
+/* =================================================================================================
+   [BE-1000] MATERIAL (Desktop/Mobile)
+================================================================================================= */
 
 .be_m_row{
   display:grid;
-  grid-template-columns: 220px 1fr 100px 120px 44px;
+  grid-template-columns: 220px 1fr 90px 110px 38px;
   gap:10px;
   align-items:center;
 }
 
-.be_m_row .input{ width:100%; }
-.be_m_row .be_m_cell{ min-width:0; }
+.be_m_row .input{
+  width:100%;
+}
 
-/* Suggest im Grid sauber */
-.be_m_row .autocomplete{ position:relative; }
-.be_m_row .m_suggest{ left:0; right:0; }
+.be_m_row .be_m_cell{
+  min-width:0;
+}
 
-/* Delete-Zellen: Button mittig */
-.be_e_row .be_e_delcell,
-.be_t_row .be_t_del,
+/* Suggest sauber */
+.be_m_row .autocomplete{
+  position:relative;
+}
+
+.be_m_row .m_suggest{
+  left:0;
+  right:0;
+}
+
+/* X mittig */
 .be_m_row .be_m_del{
   display:flex;
   align-items:center;
   justify-content:center;
 }
 
-/* Spaltenbreite näher am Icon-Button */
-.be_e_head,
-.be_e_row{
-  grid-template-columns: 180px 120px 120px 160px 1fr 38px;
+/* Mobile: kompakt als Grid-Areas, X rechts über alle Zeilen */
+@media (max-width: 720px){
+
+  .be_m_row{
+    grid-template-columns: 1fr 90px 38px; /* main | small | x */
+    grid-template-areas:
+      "art art del"
+      "txt txt del"
+      "qty unit del";
+    align-items:center;
+  }
+
+  .be_m_row .be_m_art{  grid-area: art; }
+  .be_m_row .be_m_txt{  grid-area: txt; }
+  .be_m_row .be_m_qty{  grid-area: qty; }
+  .be_m_row .be_m_unit{ grid-area: unit; }
+
+  .be_m_row .be_m_del{
+    grid-area: del;
+    align-self:stretch;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
 }
 
-.be_t_row{
-  grid-template-columns: 1fr 38px;
+
+/* =================================================================================================
+   [BE-1100] ABNAHME
+================================================================================================= */
+
+.be_abnahme{
+  font-weight:700;
 }
 
-.be_m_row{
-  grid-template-columns: 220px 1fr 100px 120px 38px;
+
+
+/* =================================================================================================
+   [BE-MOBILE-ADD-ANCHORS] + Buttons unten platzieren (Einsatz / Tätigkeiten / Material)
+   - Einsatz: + neben Gesamtzeile
+   - Tätigkeiten: + rechts unter der Liste
+   - Material: + rechts unter der Liste
+================================================================================================= */
+
+/* Einsatz: Grid (Inhalt + rechter Button) */
+.be_e_wrap{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap:10px;
+}
+
+/* rechter Block oben ausblenden (wir zeigen + unten bei Summe) */
+.be_e_right{ display:none; }
+
+/* Summe + Add in EINER Zeile */
+.be_actions--sum{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.be_actions--sum .muted{ flex:1 1 auto; }
+
+/* optional: gleiche Optik/Größe wie andere Icon Buttons */
+#be_btn_add_einsatz{ flex:0 0 auto; }
+
+/* Tätigkeiten/Material: Add-Button unter die Liste (rechts) */
+.be_actions--tasks,
+.be_actions--material{
+  display:flex;
+  justify-content:flex-end;
+  margin-top:10px;
+}
+
+/* Mobile: in Portrait alles stimmig lassen */
+@media (max-width: 720px){
+  .be_actions--sum{ margin-top:8px; }
 }

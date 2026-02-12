@@ -69,7 +69,6 @@ if (!empty($_SESSION['crm_user']['display_name'])) {
                 <input class="input" id="be_kunde_firma" name="kunde_firma" type="text" placeholder="Firma suchen …" autocomplete="off">
               </div>
 
-              
               <div id="be_customer_suggest" class="crm-suggest" hidden></div>
             </div>
           </div>
@@ -178,8 +177,8 @@ if (!empty($_SESSION['crm_user']['display_name'])) {
 
               <canvas class="be_sig" id="be_sig_dasi" width="980" height="260"></canvas>
               <div class="be_actions">
-              <input type="hidden" id="be_sig_dasi_data" name="sig_dasi_data" value="">
-              <button class="crm-btn crm-btn--sm" type="button" id="be_btn_sig_dasi_clear">Unterschrift löschen</button>
+                <input type="hidden" id="be_sig_dasi_data" name="sig_dasi_data" value="">
+                <button class="crm-btn crm-btn--sm" type="button" id="be_btn_sig_dasi_clear">Unterschrift löschen</button>
               </div>
             </div>
           </div>
@@ -231,55 +230,62 @@ if (!empty($_SESSION['crm_user']['display_name'])) {
         </div>
       </section>
 
-        <!-- 4) Einsatz, Tätigkeiten & Material -->
-        <section class="card card--wide be_card" id="sec_work">
+      <!-- 4) Einsatz, Tätigkeiten & Material -->
+      <section class="card card--wide be_card" id="sec_work">
         <div class="card__title">Einsatz, Tätigkeiten &amp; Material</div>
         <div class="card__body">
 
-            <div class="be_subtitle">Einsatzzeiten</div>
+          <!-- Einsatzzeiten -->
+          <div class="be_subtitle">Einsatzzeiten</div>
 
-            <div class="be_e_head">
+          <div class="be_e_head">
             <div>Datum</div>
             <div>Beginn</div>
             <div>Ende</div>
             <div>Einsatzzeit (min)</div>
             <div>Mitarbeiter</div>
             <div></div>
+          </div>
+
+          <div id="be_einsatz_list" class="be_list"></div>
+
+          <div class="be_actions be_actions--sum">
+            <div class="muted">
+              Gesamt: <span id="be_sum_minutes">0</span> min <span id="be_sum_hours" class="be_sum_hours"></span>
             </div>
-
-            <div id="be_einsatz_list" class="be_list"></div>
-
-            <div class="be_actions">
-            <div class="muted">Gesamt: <span id="be_sum_minutes">0</span> min</div>
             <div class="be_spacer"></div>
             <button class="crm-btn crm-btn--icon crm-btn--primary"
                     type="button" id="be_btn_add_einsatz" aria-label="Einsatzzeile hinzufügen">+</button>
-            </div>
+          </div>
 
-            <hr class="be_sep">
+          <hr class="be_sep">
 
-            <div class="be_subtitle">Tätigkeiten</div>
-            <div id="be_tasks_list" class="be_list"></div>
-            <div class="be_actions">
+          <!-- Tätigkeiten -->
+          <div class="be_subtitle">Tätigkeiten</div>
+
+          <div id="be_tasks_list" class="be_list"></div>
+
+          <div class="be_actions">
             <div class="be_spacer"></div>
             <button class="crm-btn crm-btn--icon crm-btn--primary"
                     type="button" id="be_btn_add_task" aria-label="Tätigkeit hinzufügen">+</button>
-            </div>
+          </div>
 
-            <hr class="be_sep">
+          <hr class="be_sep">
 
-            <div class="be_subtitle">Material</div>
-            <div id="be_material_list" class="be_list"></div>
-            <div class="be_actions">
+          <!-- Material -->
+          <div class="be_subtitle">Material</div>
+
+          <div id="be_material_list" class="be_list"></div>
+
+          <div class="be_actions">
             <div class="be_spacer"></div>
             <button class="crm-btn crm-btn--icon crm-btn--primary"
                     type="button" id="be_btn_add_material" aria-label="Materialzeile hinzufügen">+</button>
-            </div>
+          </div>
 
         </div>
-        </section>
-
-
+      </section>
 
       <!-- 5) Abnahme -->
       <section class="card card--wide be_card" id="sec_abnahme">
@@ -295,16 +301,16 @@ if (!empty($_SESSION['crm_user']['display_name'])) {
 
           <div class="be_row">
             <div class="be_col be_col--grow">
-                <div class="be_choices">
-              <label class="be_chk">
-                <input type="checkbox" id="be_ab_done" name="ab_done" value="1">
-                Auftrag - <strong>beendet</strong>, Dienstleistung <strong>überprüft und abgeschlossen.</strong> 
-              </label>
+              <div class="be_choices">
+                <label class="be_chk">
+                  <input type="checkbox" id="be_ab_done" name="ab_done" value="1">
+                  Auftrag - <span class="be_abnahme">beendet</span>, Dienstleistung <span class="be_abnahme">überprüft und abgeschlossen.</span> 
+                </label>
 
-              <label class="be_chk">
-                <input type="checkbox" id="be_ab_open" name="ab_open" value="1">
-                Auftrag - offen, weitere Dienstleistungen notwendig. 
-              </label>
+                <label class="be_chk">
+                  <input type="checkbox" id="be_ab_open" name="ab_open" value="1">
+                  Auftrag - offen, weitere Dienstleistungen notwendig. 
+                </label>
               </div>
 
               <input type="hidden" id="be_ab_status" name="ab_status" value="">

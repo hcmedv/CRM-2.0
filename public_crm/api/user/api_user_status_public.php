@@ -14,6 +14,8 @@ declare(strict_types=1);
   - sonst -> online
 */
 
+
+define('CRM_MODULE', 'login');
 require_once __DIR__ . '/../../_inc/bootstrap.php';
 
 header('Content-Type: application/json; charset=utf-8');

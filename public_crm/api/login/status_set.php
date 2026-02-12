@@ -24,9 +24,10 @@ declare(strict_types=1);
  * - Status-Quelle: crm_status.php (Single Source of Truth)
  */
 
-error_reporting(E_ALL);
-ini_set('display_errors', '1');
+#error_reporting(E_ALL);
+#ini_set('display_errors', '1');
 
+define('CRM_MODULE', 'login');
 require_once __DIR__ . '/../../_inc/bootstrap.php';
 require_once CRM_ROOT . '/login/crm_status.php';
 

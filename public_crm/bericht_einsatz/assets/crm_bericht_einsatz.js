@@ -1,15 +1,18 @@
 // Datei: /public_crm/bericht_einsatz/assets/crm_bericht_einsatz.js
 
-
-
 (function () {
   'use strict';
+
+  /* =================================================================================================
+     [BE-0000] CORE / HELPERS
+  ================================================================================================= */
 
   const DEBUG = false;
   function dbg(...a) { if (DEBUG) console.log('[BE]', ...a); }
 
   function qs(sel, root) { return (root || document).querySelector(sel); }
   function qsa(sel, root) { return Array.from((root || document).querySelectorAll(sel)); }
+
   function escHtml(s) {
     return String(s ?? '').replace(/[&<>"']/g, (m) => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -39,7 +42,16 @@
     return [];
   }
 
-  // API
+  function clamp(n, min, max) {
+    const v = Number(n);
+    if (Number.isNaN(v)) return min;
+    return Math.max(min, Math.min(max, v));
+  }
+
+  /* =================================================================================================
+     [BE-0100] API
+  ================================================================================================= */
+
   const API_BASE_RAW = String(window.__CRM?.apiBase ?? window.CRM_API_BASE ?? '').trim();
   const API_BASE = API_BASE_RAW.replace(/\/+$/, '');
 
@@ -53,19 +65,20 @@
     return normalizeApiArray(await res.json());
   }
 
+  /* =================================================================================================
+     [BE-0200] KUNDE (Autofill + Chip)
+  ================================================================================================= */
 
-    // ========== Kunde Autofill + Chip ==========
-    function customerDisplay(c) 
-    {
+  function customerDisplay(c)
+  {
     const kn = String(
-        c.customer_number ?? c.customerNumber ??
-        c.kunden_nummer ?? c.kunde_nummer ?? c.kundennummer ?? c.nr ?? c.address_no ?? ''
+      c.customer_number ?? c.customerNumber ??
+      c.kunden_nummer ?? c.kunde_nummer ?? c.kundennummer ?? c.nr ?? c.address_no ?? ''
     ).trim();
 
     if (kn) return `KN ${kn}`;
     return 'Unbekannt';
-    }
-
+  }
 
   function phonesToString(c) {
     if (Array.isArray(c.phones)) {
@@ -112,6 +125,7 @@
     let ownerVal = String(
       c.owner_name ?? c.ownerName ?? c.owner ?? c.inhaber ?? c.inhaber_name ?? c.geschaeftsfuehrer ?? c.gf ?? ''
     ).trim();
+
     if (!ownerVal) {
       const fullName = String(c.name ?? '').trim();
       const company  = String(c.company ?? c.firma ?? '').trim();
@@ -129,7 +143,6 @@
       else emEl.value = '';
     }
 
-    // Signer Defaults aktualisieren
     syncSignerFieldsFromDefaults(true);
     updateSignatureWatermarks();
   }
@@ -147,7 +160,6 @@
 
     const chip = qs('#be_customer_chip'); if (chip) chip.textContent = 'Unbekannt';
 
-    // Felder leeren (optional bewusst nur die autofill-Felder)
     const ownerEl = qs('#be_kunde_inhaber'); if (ownerEl) ownerEl.value = '';
     const apEl    = qs('#be_kunde_ansprechpartner'); if (apEl) apEl.value = '';
     const strEl   = qs('#be_kunde_strasse'); if (strEl) strEl.value = '';
@@ -156,7 +168,6 @@
     const omEl    = qs('#be_kunde_auftragsmail'); if (omEl) omEl.value = '';
     const emEl    = qs('#be_kunde_emails'); if (emEl) emEl.value = '';
 
-    // Suggest schließen
     if (box) { box.hidden = true; box.innerHTML = ''; }
 
     syncSignerFieldsFromDefaults(true);
@@ -168,10 +179,8 @@
     const box   = qs('#be_customer_suggest');
     if (!input || !box) return;
 
-    // Namensraum sicherstellen
     if (!box.classList.contains('crm-suggest')) box.classList.add('crm-suggest');
 
-    // Lib muss über settings eingebunden sein
     if (window.CRM_AUTOFILL && typeof CRM_AUTOFILL.initCustomerAutocomplete === 'function') {
       CRM_AUTOFILL.initCustomerAutocomplete({
         input:   '#be_kunde_firma',
@@ -179,9 +188,7 @@
         id:      '#be_kunde_id',
         number:  '#be_kunden_nummer',
         api:     API_CUSTOMERS,
-        onSelect: function (c) {
-          fillCustomer(c);
-        }
+        onSelect: function (c) { fillCustomer(c); }
       });
     }
 
@@ -189,7 +196,10 @@
     if (chip) chip.addEventListener('click', clearCustomer);
   }
 
-  // ========== Defaults ==========
+  /* =================================================================================================
+     [BE-0300] DEFAULTS / CHECKBOX-GRUPPEN
+  ================================================================================================= */
+
   function applyDefaults() {
     const d = qs('#be_date');
     if (d && !d.value) d.value = todayISO();
@@ -198,7 +208,6 @@
     const emp = qs('#be_employee');
     if (emp && def && !String(emp.value || '').trim()) emp.value = def;
 
-    // Start: 1 Zeile in Einsatz/Tätigkeit/Material
     if (qs('#be_einsatz_list')?.children.length === 0) addEinsatzRow();
     if (qs('#be_tasks_list')?.children.length === 0) addTaskRow();
     if (qs('#be_material_list')?.children.length === 0) addMaterialRow();
@@ -206,7 +215,6 @@
     syncSignerFieldsFromDefaults(true);
   }
 
-  // ========== Checkbox exclusiv ==========
   function wireExclusiveCheckboxGroup(ids, hiddenId, valueMap) {
     const boxes = ids.map(id => qs('#' + id)).filter(Boolean);
     const hidden = hiddenId ? qs('#' + hiddenId) : null;
@@ -228,7 +236,10 @@
     updateHidden();
   }
 
-  // ========== Einsatzzeiten (Variante B) ==========
+  /* =================================================================================================
+     [BE-0400] EINSATZZEITEN (Variante B) + SUMME (Min + h)
+  ================================================================================================= */
+
   function timeToMinutes(t) {
     if (!t || typeof t !== 'string' || t.indexOf(':') < 0) return null;
     const [h, m] = t.split(':');
@@ -253,15 +264,28 @@
     return diff;
   }
 
+  function formatHoursFromMinutes(minTotal) {
+    if (!minTotal || minTotal <= 0) return '';
+    const h = minTotal / 60;
+    let s = h.toFixed(2);
+    s = s.replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+    s = s.replace('.', ',');
+    return `(${s} h)`;
+  }
+
   function updateSumMinutes() {
     const rows = qsa('.be_e_row', qs('#be_einsatz_list'));
     let sum = 0;
     rows.forEach(r => { sum += (parseInt(String(qs('.be_e_dur', r)?.value || '0'), 10) || 0); });
-    const out = qs('#be_sum_minutes');
-    if (out) out.textContent = String(sum);
+
+    const outMin = qs('#be_sum_minutes');
+    if (outMin) outMin.textContent = String(sum);
+
+    const outH = qs('#be_sum_hours');
+    if (outH) outH.textContent = sum > 0 ? ' ' + formatHoursFromMinutes(sum) : '';
   }
 
-    function wireEinsatzRow(row) {
+  function wireEinsatzRow(row) {
     const s = qs('.be_e_start', row);
     const e = qs('.be_e_end', row);
     const x = qs('.be_row_del', row);
@@ -272,19 +296,18 @@
     if (e) { e.addEventListener('input', onChange); e.addEventListener('change', onChange); }
 
     if (x) {
-        x.addEventListener('click', () => {
+      x.addEventListener('click', () => {
         row.remove();
         updateSumMinutes();
-        });
+      });
     }
 
-    // Mitarbeiter default setzen (pro Zeile)
     const def = String(qs('#default_mitarbeiter')?.value ?? '').trim();
     const mit = qs('.be_e_mit', row);
     if (mit && def && !String(mit.value || '').trim()) mit.value = def;
-    }
+  }
 
-    function addEinsatzRow() {
+  function addEinsatzRow() {
     const list = qs('#be_einsatz_list');
     if (!list) return;
 
@@ -294,49 +317,48 @@
     const row = document.createElement('div');
     row.className = 'be_e_row';
 
-    // Keine Labels mehr in der Zeile – nur Inputs (Kopfzeile steht oben)
     row.innerHTML = `
-        <div class="be_e_cell be_e_date">
+      <div class="be_e_cell be_e_date">
         <input class="input be_e_dat" name="e_dat[]" type="date" value="${escHtml(dateVal)}" aria-label="Datum">
-        </div>
+      </div>
 
-        <div class="be_e_cell">
+      <div class="be_e_cell be_e_startcell">
         <input class="input be_e_start" name="e_start[]" type="time" aria-label="Beginn">
-        </div>
+      </div>
 
-        <div class="be_e_cell">
+      <div class="be_e_cell be_e_endcell">
         <input class="input be_e_end" name="e_end[]" type="time" aria-label="Ende">
-        </div>
+      </div>
 
-        <div class="be_e_cell be_e_durcell">
+      <div class="be_e_cell be_e_durcell">
         <input class="input be_e_dur" name="e_dur[]" type="text" inputmode="numeric" readonly aria-label="Einsatzzeit (min)">
-        </div>
+      </div>
 
-        <div class="be_e_cell be_e_mitcell">
+      <div class="be_e_cell be_e_mitcell">
         <input class="input be_e_mit" name="e_mit[]" type="text" value="${escHtml(def)}" aria-label="Mitarbeiter">
-        </div>
+      </div>
 
-        <div class="be_e_cell be_e_delcell">
+      <div class="be_e_cell be_e_delcell">
         <button class="crm-btn crm-btn--icon crm-btn--danger be_row_del" type="button" title="Zeile löschen" aria-label="Zeile löschen">×</button>
-        </div>
-
+      </div>
     `;
 
     list.appendChild(row);
     wireEinsatzRow(row);
 
-    // initial berechnen + Summe
     calcRowMinutes(row);
     updateSumMinutes();
-    }
-
+  }
 
   function wireEinsatzList() {
     const btn = qs('#be_btn_add_einsatz');
     if (btn) btn.addEventListener('click', addEinsatzRow);
   }
 
-  // ========== Tätigkeiten ==========
+  /* =================================================================================================
+     [BE-0500] TÄTIGKEITEN
+  ================================================================================================= */
+
   function wireTaskRow(row) {
     const x = qs('.be_row_del', row);
     if (x) x.addEventListener('click', () => row.remove());
@@ -352,10 +374,10 @@
       <div class="be_t_cell be_t_txt">
         <input class="input" type="text" name="t_txt[]" placeholder="Kurzbeschreibung (z. B. Patchkabel ersetzt)" maxlength="120">
       </div>
-        <div class="be_t_cell be_t_del">
-        <button class="crm-btn crm-btn--icon crm-btn--danger be_row_del" type="button" title="Zeile löschen" aria-label="Zeile löschen">×</button>
-        </div>
 
+      <div class="be_t_cell be_t_del">
+        <button class="crm-btn crm-btn--icon crm-btn--danger be_row_del" type="button" title="Zeile löschen" aria-label="Zeile löschen">×</button>
+      </div>
     `;
     list.appendChild(row);
     wireTaskRow(row);
@@ -366,7 +388,10 @@
     if (btn) btn.addEventListener('click', addTaskRow);
   }
 
-  // ========== Material (Zeile, Add/Remove, Autocomplete) ==========
+  /* =================================================================================================
+     [BE-0600] MATERIAL (Zeile, Add/Remove, Autocomplete)
+  ================================================================================================= */
+
   function pick(it, keys, defVal = '') {
     for (const k of keys) {
       if (it && Object.prototype.hasOwnProperty.call(it, k) && it[k] != null && String(it[k]).trim() !== '') {
@@ -418,7 +443,14 @@
     suggest.addEventListener('click', (ev) => {
       const btn = ev.target.closest('button[data-json]');
       if (!btn) return;
-      const it = JSON.parse(decodeURIComponent(btn.getAttribute('data-json') || ''));
+
+      let it = null;
+      try {
+        it = JSON.parse(decodeURIComponent(btn.getAttribute('data-json') || ''));
+      } catch (e) {
+        hide();
+        return;
+      }
 
       const artNo = pick(it, ['art_no', 'artnr', 'artikel_nr', 'artikelnummer', 'nr', 'id'], '');
       const name  = pick(it, ['name', 'bezeichnung', 'title', 'text'], '');
@@ -478,11 +510,14 @@
     qsa('.be_m_row', qs('#be_material_list')).forEach(wireMaterialRow);
   }
 
-  // ========== Signaturen ==========
+  /* =================================================================================================
+     [BE-0700] SIGNATURES (3x Canvas)
+  ================================================================================================= */
+
   const sigState = {
-    mainSigned: false,  // Datensicherung "Kunde"
-    dasiSigned: false,  // Datensicherung "DaSi"
-    abSigned:   false,  // Abnahme "Kunde"
+    mainSigned: false,
+    dasiSigned: false,
+    abSigned:   false,
     touched: {
       main: { name: false },
       dasi: { name: false },
@@ -496,13 +531,8 @@
     const vOwner = String(owner?.value ?? '').trim();
     const vAp    = String(ap?.value ?? '').trim();
 
-    // Datensicherung (main): eher Inhaber/GF, sonst Ansprechpartner
     if (kind === 'main') return vOwner || vAp;
-
-    // Datensicherung (dasi): eher Ansprechpartner, sonst Inhaber/GF
     if (kind === 'dasi') return vAp || vOwner;
-
-    // Abnahme (ab): in der Regel Ansprechpartner unterschreibt
     return vAp || vOwner;
   }
 
@@ -526,22 +556,25 @@
     return out ? out.toUpperCase() : '';
   }
 
-    function syncSignerFieldsFromDefaults(force = false) {
+  function syncSignerFieldsFromDefaults(force = false) {
     const mainName = qs('#be_sig_main_name');
     const dasiName = qs('#be_sig_dasi_name');
+    const abName   = qs('#be_sig_ab_name');
 
     const defMain = getDefaultSignerName('main');
     const defDasi = getDefaultSignerName('dasi');
+    const defAb   = getDefaultSignerName('ab');
 
     if (mainName && (!sigState.touched.main.name || force)) {
-        mainName.value = String(defMain || '').trim();
+      mainName.value = String(defMain || '').trim();
     }
     if (dasiName && (!sigState.touched.dasi.name || force)) {
-        dasiName.value = String(defDasi || '').trim();
+      dasiName.value = String(defDasi || '').trim();
     }
+    if (abName && (!sigState.touched.ab.name || force)) {
+      abName.value = String(defAb || '').trim();
     }
-
-
+  }
 
   function drawSignatureWatermark(canvas, ctx, nameUpper, dateDE) {
     const w = canvas.width;
@@ -670,8 +703,10 @@
     }
   }
 
+  /* =================================================================================================
+     [BE-9990] INIT
+  ================================================================================================= */
 
-  // ========== Init ==========
   document.addEventListener('DOMContentLoaded', () => {
     applyDefaults();
     wireCustomerAutocomplete();
@@ -698,8 +733,6 @@
     sigDasiCtl = initSignature('be_sig_dasi', 'be_sig_dasi_data', 'be_btn_sig_dasi_clear', 'dasiSigned', 'dasi');
     sigAbCtl   = initSignature('be_sig_ab',   'be_sig_ab_data',   'be_btn_sig_ab_clear',   'abSigned',   'ab');
 
-
-    // Default Signer reaktiv bei Änderungen
     const ap = qs('#be_kunde_ansprechpartner');
     const owner = qs('#be_kunde_inhaber');
     const dt = qs('#be_date');
@@ -708,14 +741,8 @@
     if (ap) ap.addEventListener('input', () => { syncSignerFieldsFromDefaults(); updateSignatureWatermarks(); });
     if (dt) dt.addEventListener('change', () => { updateSignatureWatermarks(); });
 
-    // Initial Summen
     qsa('.be_e_row', qs('#be_einsatz_list')).forEach((r) => calcRowMinutes(r));
     updateSumMinutes();
   });
 
 })();
-
-
-
-
-
