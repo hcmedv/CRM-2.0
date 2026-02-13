@@ -85,26 +85,38 @@ function FN_ReadJsonFile(string $file): array
 
 function FN_WriteJsonFileAtomic(string $file, array $data): bool
 {
-    if ($file === '') { return false; }
+    if (trim($file) === '') { return false; }
+
     FN_EnsureDirForFile($file);
 
-    $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    if (!is_string($json)) { return false; }
+    $dir = dirname($file);
+    if (!is_dir($dir)) { return false; }
 
-    $tmp = $file . '.tmp.' . bin2hex(random_bytes(6));
+    $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (!is_string($json) || $json === '') { return false; }
+
+    try
+    {
+        $tmp = $file . '.tmp.' . bin2hex(random_bytes(6));
+    }
+    catch (Throwable $e)
+    {
+        $tmp = $file . '.tmp.' . (string)mt_rand(100000, 999999);
+    }
 
     if (@file_put_contents($tmp, $json, LOCK_EX) === false) {
         @unlink($tmp);
         return false;
     }
 
-    if (!@rename($tmp, $file)) {
+    if (@rename($tmp, $file) === false) {
         @unlink($tmp);
         return false;
     }
 
     return true;
 }
+
 
 function FN_IsoNow(): string
 {

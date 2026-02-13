@@ -85,12 +85,26 @@ function TV_Log(string $mod, string $msg, array $ctx = []): void
 
     $dir = CRM_MOD_PATH($mod, 'log');
     if ($dir === '') { return; }
-    if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0775, true);
+        if (!is_dir($dir)) { return; }
+    }
 
     $file = rtrim($dir, '/') . '/read_' . date('Y-m-d') . '.log';
-    $row  = ['ts' => date('c'), 'msg' => $msg, 'ctx' => $ctx];
-    @file_put_contents($file, json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL, FILE_APPEND);
+    $row  = [
+        'ts'  => date('c'),
+        'msg' => $msg,
+        'ctx' => $ctx
+    ];
+
+    @file_put_contents(
+        $file,
+        json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
+        FILE_APPEND | LOCK_EX
+    );
 }
+
 
 function TV_FileWriteAtomic(string $file, string $content): void
 {
@@ -296,8 +310,9 @@ $rawFile    = null;
 
 if ((bool)($rawStore['enabled'] ?? false) === true) {
 
-    // CRM_MOD_PATH('teamviewer','data') ist bereits /data/teamviewer/
-    // => nur Dateiname anhängen, kein data_dir doppelt
+    // CRM_MOD_PATH('teamviewer','data') liefert:
+    // <crm_data>/modules/teamviewer/
+    // => nur Dateiname anhängen, kein Unterordner doppelt setzen
     $fileName = (string)($rawStore['filename_current'] ?? 'teamviewer_raw_current.json');
     $rawFile  = rtrim($dataDir, '/') . '/' . $fileName;
 

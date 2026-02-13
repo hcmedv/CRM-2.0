@@ -1,84 +1,81 @@
-# Ablauf & Datenfluss
+# 500_flow.md
+# CRM V2 – SYSTEM FLOW
 
-## Ziel
-Transparenter, reproduzierbarer Datenfluss.
-Jede Stufe hat **klare Verantwortung**.
+Status: Verbindliche Ablaufdefinition
 
----
+------------------------------------------------------------
+# 1. ABLAUF
 
-## Gesamtüberblick
-
-Ingress  
-→ Normalisierung  
-→ Enrichment  
-→ Writer  
-→ Merge  
-→ Recompute  
+Trigger
+→ rules_<modul>_BuildPatch()
+→ optional Enrich
+→ Writer (upsert)
+→ events.json
+→ Reader
+→ API
 → UI
 
----
+------------------------------------------------------------
+# 2. TRIGGER
 
-## 1. Ingress
-Quellen:
-- PBX
-- TeamViewer
-- Camera
-- UI (manuelle Aktionen)
+Trigger liefern Rohdaten.
 
-Aufgabe:
-- Entgegennahme externer Daten
-- Keine Interpretation
-- Keine Persistenz
+Trigger dürfen:
 
----
+- timing setzen
+- refs setzen
+- meta.<source> befüllen
 
-## 2. Normalisierung
-- Quellenformate → internes, neutrales Format
-- Mapping technischer Felder
-- Fehlerhafte Daten früh verwerfen
+Trigger dürfen niemals workflow.state setzen.
 
----
+------------------------------------------------------------
+# 3. PATCH
 
-## 3. Enrichment
-- Anreicherung mit Wissen:
-  - Kunden
-  - Kontakte
-  - interne Zuordnungen
-- Zentrale Logik
-- Quellenunabhängig
+Patch enthält:
 
----
+- event_source
+- event_type
+- timing
+- refs
+- meta
 
-## 4. Writer
-- Einzige Schreibstelle
-- Schema-Prüfung
-- Übergabe an Merge
+Patch enthält nicht:
 
----
+- workflow
+- created_at
+- updated_at
 
-## 5. Merge
-- Idempotenter Abgleich
-- Zusammenführen von Daten
-- Respektiert bestehende Werte
-- Setzt Meta-Informationen
+Patches ohne refs dürfen kein neues Event erzeugen.
 
----
+------------------------------------------------------------
+# 4. WRITER
 
-## 6. Recompute
-- Abgeleitete Felder
-- Aggregationen
-- Zustandsabhängige Berechnungen
+Writer:
 
----
+- sucht Event via refs[]
+- merged oder erstellt neu
+- setzt workflow.state bei Neu auf open
 
-## 7. UI
-- Read-only Anzeige
-- Edit nur über definierte Commit-Wege
-- Keine impliziten Writes
+------------------------------------------------------------
+# 5. API-PRINZIP
 
----
+API ist reine Transport- und Zugriffsschicht.
 
-## Leitregeln
-- Jede Stufe kennt nur ihre Nachbarn
-- Kein Überspringen von Stufen
-- Keine versteckten Seiteneffekte
+API enthält:
+
+- keine Geschäftslogik
+- keine Workflow-Logik
+- keine Merge-Logik
+- keine Dateizugriffe
+
+------------------------------------------------------------
+# 6. WORKLOAD
+
+Workload entsteht aus:
+
+- timing
+- optional worklog
+
+Session-Ende ist kein Workflow-Übergang.
+
+------------------------------------------------------------

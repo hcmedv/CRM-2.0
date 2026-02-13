@@ -5,7 +5,7 @@ declare(strict_types=1);
  * Datei: /public_crm/login/totp_setup.php
  * Zweck (PoC):
  * - Zeigt den QR-Code (TOTP) für den aktuell eingeloggten User an
- * - Liest 2fa / 2fa_secret aus /data/login/mitarbeiter.json
+ * - Liest 2fa / 2fa_secret aus <crm_data>/core/users.json
  * - KEIN Speichern, KEIN Enforce, nur Anzeige zum Einrichten am Handy
  *
  * Voraussetzungen:

@@ -825,7 +825,7 @@ function FN_M365_WriteJsonFileAtomic(string $file, array $payload, bool $pretty)
     $json = json_encode($payload, $flags);
     if ($json === false) { return false; }
 
-    if (@file_put_contents($tmp, $json . "\n") === false) { return false; }
+    if (@file_put_contents($tmp, $json . "\n", LOCK_EX) === false) { return false; }
 
     return @rename($tmp, $file);
 }

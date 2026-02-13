@@ -6,7 +6,7 @@ declare(strict_types=1);
  *
  * Zweck:
  * - Setzt den manuellen Verfügbarkeitsstatus eines eingeloggten Users
- * - Persistiert nach /data/login/mitarbeiter_status.json
+ * - Persistiert nach <crm_data>/core/user_status.json
  *
  * Regeln:
  * - logged_in darf NICHT verloren gehen -> Update erfolgt immer per Merge auf bestehenden User-Record
@@ -19,6 +19,7 @@ declare(strict_types=1);
  * Response:
  * - {"ok":true,"user":"admin","row":{...}}
  */
+
 
 require_once dirname(__DIR__, 2) . '/_inc/bootstrap.php';
 require_once CRM_ROOT . '/_inc/auth.php';

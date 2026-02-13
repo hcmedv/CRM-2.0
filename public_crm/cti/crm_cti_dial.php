@@ -9,12 +9,12 @@ declare(strict_types=1);
  * - Auth via Session
  * - Caller-Gerät automatisch anhand User-Kontext (office|remote) bestimmen:
  *   - Profil aus $_SESSION (crm_user_context.php)
- *   - Caller aus /data/login/mitarbeiter.json -> cti.profiles[profile].caller
+ *   - Caller aus <crm_data>/core/users.json -> cti.profiles[profile].caller
  *   - Fallback: cti.default_profile -> profiles[..].caller
  *   - Fallback: settings cti.sipgate.default_device
  *   - Optional: Sipgate defaultDevice (wenn aktiviert)
  * - Allowlist einschränken (cti.sipgate.allowed_devices)
- * - Secrets via CRM_SECRET() (Modul-Secrets: /config/cti/secrets_cti.php)
+ * - Secrets via CRM_SECRET() (Modul-Secrets: <crm_config>/cti/secrets_cti.php)
  *
  * Request:
  * - POST JSON: { "number":"+49...", "caller":"e0"(optional override) }
@@ -24,8 +24,9 @@ declare(strict_types=1);
  *
  * Logging:
  * - Nur wenn cti.sipgate.debug === true ODER CRM_DEBUG === true
- * - /log/cti_dial_YYYY-MM-DD.log
+ * - <log>/cti_dial_YYYY-MM-DD.log
  */
+
 
 require_once __DIR__ . '/../_inc/bootstrap.php';
 require_once CRM_ROOT . '/_inc/auth.php';
@@ -82,13 +83,27 @@ function FN_Log(bool $debug, string $msg, array $ctx = []): void
     if (!$debug) { return; }
 
     $dir = CRM_BASE . '/log';
-    if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0775, true);
+    }
 
     $file = $dir . '/cti_dial_' . date('Y-m-d') . '.log';
-    $row  = ['ts' => date('c'), 'msg' => $msg, 'ctx' => $ctx];
 
-    @file_put_contents($file, json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL, FILE_APPEND);
+    $row = [
+        'ts'  => date('c'),
+        'msg' => $msg,
+        'ctx' => $ctx,
+    ];
+
+    $flags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+
+    @file_put_contents(
+        $file,
+        json_encode($row, $flags) . PHP_EOL,
+        FILE_APPEND | LOCK_EX
+    );
 }
+
 
 /*
  * 0004 - FN_SipgateRequest
@@ -168,7 +183,12 @@ function FN_SipgateRequest(string $apiBase, string $tokenId, string $tokenSecret
 
 /*
  * 0005 - FN_LoadEmployees
- * Lädt /data/login/mitarbeiter.json (CRM_LOGIN_FILE) robust als Array.
+ * Lädt die Benutzerdatei über CRM_LOGIN_FILE.
+ *
+ * CRM_LOGIN_FILE verweist verbindlich auf:
+ * <crm_data>/core/users.json
+ *
+ * Kein direkter Pfadzugriff innerhalb der Funktion.
  */
 function FN_LoadEmployees(): array
 {

@@ -1,170 +1,188 @@
-# 115 – Authentifizierung & Login-Struktur (CRM)
+# 115 – Login & Authentifizierungsstruktur (CRM)
 
 ## Ziel
-Definition einer **einfachen, sauberen und erweiterbaren Authentifizierungsbasis**
-für das interne CRM (Mitarbeiterbereich).
 
-Schwerpunkte:
-- klare Trennung Mitarbeiter ↔ Kunden
-- Session-basierte Sicherheit
-- kein htaccess-Zwang
-- später erweiterbar (Rollen, Rechte, Kunden-Login)
+Saubere Trennung von:
 
----
+- Benutzerverwaltung (Core)
+- Authentifizierung (Login-Modul)
+- Session (Runtime)
+- Fachlogik (CRM)
 
-## Geltungsbereich
-
-Diese Auth-Struktur gilt **ausschließlich für `public_crm`**.
-
-- Mitarbeiter-Login → CRM intern
-- Kunden-Zugänge → **separater Bereich**, später definiert
-- Keine Vermischung von Benutzerarten
+Login ist nur Eintrittspunkt.
+Benutzer sind Core-Daten.
+Workflow ist unabhängig vom Login.
 
 ---
 
-## Login-Modul
+# Architekturüberblick
 
-### Modulname
-/login
+Benutzerquelle:
+```
+<crm_data>/core/users.json
+```
 
-### Login-Route
+Login-Oberfläche:
+```
+/public_crm/login/
+```
 
-- eigene Seite
-- kein Overlay
-- kein Modal
-- bewusst simpel gehalten
+Session:
+- Serverseitig
+- Nicht persistent
+- Keine Datei im CRM-Data-Bereich
 
 ---
 
-## Mitarbeiter-Daten
+# Verantwortlichkeiten
 
-### Speicherort
-/data/login/mitarbeiter.json
+## 1. Benutzerverwaltung (Core)
 
+Speicherort:
+```
+<crm_data>/core/users.json
+```
 
-Liegt bewusst unter `/data/*`:
+Benutzer sind:
+
+- Systemobjekte
+- Nicht Modulobjekte
+- Nicht Login-Objekte
+
+Benutzerverwaltung wird später eigenes Modul.
+
+Login darf Benutzer nicht besitzen oder definieren.
+
+---
+
+## 2. Login-Modul
+
+Pfad:
+```
+/public_crm/login/
+```
+
+Enthält z. B.:
+
+- index.php
+- logout.php
+- totp.php
+- totp_setup.php
+
+Login:
+
+- prüft username
+- prüft Passwort
+- prüft optional TOTP
+- startet Session
+- setzt Session-Variablen
+
+Login speichert keine Benutzerstruktur.
+
+---
+
+## 3. Session
+
+Session ist Runtime-Zustand.
+
+Enthält z. B.:
+
+- user_id
+- roles
+- login_timestamp
+- last_activity
+
+Session ist:
+
 - nicht versioniert
-- runtime-relevant
-- analog zu anderen Stammdaten (Kunden etc.)
-
-### Struktur (konzeptionell)
-- `id`
-- `name`
-- `email`
-- `username`
-- `password_hash`
-- `roles[]`
-- `is_active`
-
-Regeln:
-- Passwort **nur als Hash**
-- Klartext-Passwörter verboten
-- Datei gilt als **interne Betriebsdatei**
+- nicht CRM-Data
+- nicht persistent gespeichert
 
 ---
 
-## Login-Flow (vereinfacht)
+# TOTP (2FA)
 
-1. Aufruf `/login`
-2. Eingabe: Benutzername + Passwort
-3. Prüfung:
-   - Benutzer existiert
-   - Benutzer ist aktiv
-   - Passwort-Hash passt
-4. Erfolg:
-   - Session initialisieren
-   - Session-ID regenerieren
-   - Userdaten in Session speichern
-5. Redirect:
-   - Ziel: `/` (Dashboard)
+TOTP-Konfiguration liegt im Benutzerobjekt:
 
----
+```
+auth.totp_enabled
+auth.totp_secret
+```
 
-## Session-Handling
+Beispiel:
 
-- Session ist Pflicht für alle internen Seiten
-- Session enthält:
-  - `user_id`
-  - `username`
-  - `roles`
-  - `csrf_token`
-- Session-Timeout konfigurierbar
-- Session wird beim Login erneuert
+```
+{
+  "id": "u_01",
+  "username": "tbuss",
+  "auth": {
+    "password_hash": "...",
+    "totp_enabled": true,
+    "totp_secret": "..."
+  }
+}
+```
+
+TOTP ist Teil des Benutzers.
+Nicht Teil des Login-Moduls.
 
 ---
 
-## Zugriffsschutz
+# Sicherheitsprinzipien
 
-### Interne Seiten (`public_crm/*`)
-- Login **zwingend erforderlich**
-- Zugriff ohne Session nicht erlaubt
+1. Login greift ausschließlich auf:
+   ```
+   <crm_data>/core/users.json
+   ```
 
-### Login-Seite
-- öffentlich erreichbar
-- keine Session-Pflicht
+2. Login darf keine Workflow-States setzen.
+
+3. Login darf keine Event-Daten verändern.
+
+4. Login ist technisch – nicht fachlich.
+
+5. Benutzerverwaltung liegt nicht im Public-Bereich und nicht in einer Modulstruktur,
+   sondern ausschließlich unter:
+   ```
+   <crm_data>/core/
+   ```
+
 
 ---
 
-## CSRF-Schutz
+# Trennungsprinzip
 
-- CSRF-Token pro Session
-- Token wird:
-  - serverseitig geprüft
-  - clientseitig (Runtime) bereitgestellt
+Benutzer = Core  
+Login = Oberfläche  
+Session = Runtime  
+Events = Fachobjekte  
 
-Regeln:
-- alle schreibenden Aktionen benötigen CSRF
-- kein CSRF im Query-String
-- Übergabe per Header oder POST-Body
+Keine Vermischung.
 
 ---
 
-## Konfiguration
+# Erweiterbarkeit
 
-### Login-Settings
-Pfad: /config/login/settings_login.php
+Diese Struktur erlaubt:
 
+- Rollenmodell
+- Rechte-Matrix
+- API-Token
+- Mandantenfähigkeit
+- Audit-Logging
 
-Enthält:
-- Session-Timeout
-- Cookie-Parameter
-- CSRF-Einstellungen
-- Pfad zur `mitarbeiter.json`
-- optionale Debug-Flags
-
-Keine Benutzer- oder Passwortdaten.
+Ohne strukturellen Bruch.
 
 ---
 
-## Rollen & Rechte (Ausblick)
+# Fazit
 
-Aktueller Stand:
-- Rollen vorhanden (`roles[]`)
-- Rechte noch nicht ausgewertet
+Benutzer gehören in:
 
-Zukunft:
-- rollenbasierte Sichtbarkeit
-- modulabhängige Berechtigungen
-- Kunden-Login getrennt implementiert
+```
+<crm_data>/core/
+```
 
----
+Login ist nur Eintrittspunkt.
 
-## Sicherheit – Leitlinien
-
-- keine htaccess-Abhängigkeit
-- keine Credentials im Frontend
-- keine sensiblen Daten in URLs
-- kein POST-Zustand in Browser-History
-- Debug-Ausgaben nur bei aktivem Debug
-
----
-
-## Ergebnis
-
-- einfache, robuste Login-Basis
-- vollständig unter eigener Kontrolle
-- klar dokumentiert
-- bereit für spätere Erweiterung
-
-Diese Auth-Struktur ist **verbindlich** für das CRM.
-
+Die CRM-Architektur bleibt stabil, wenn Login austauschbar ist.

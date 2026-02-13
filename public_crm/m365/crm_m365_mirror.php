@@ -8,19 +8,31 @@ Datei: /public_crm/m365/crm_m365_read.php
 
 Zielbild:
 - Holt Daten aus Microsoft Graph (App-only via client_credentials)
-- Schreibt RAW-Dumps + Status/LastError unter /data/m365/*
-- Zusätzlich: schreibt Core-Files (/data/contacts.json, /data/calendar.json) nur bei Änderung (Hash)
+- Schreibt RAW-Dumps + Status/LastError unter:
+    <crm_data>/modules/m365/
+  (Zugriff ausschließlich über CRM_MOD_PATH('m365','data'))
+
+- Zusätzlich: schreibt Core-Files nur bei Änderung (Hash):
+    <crm_data>/master/contacts.json
+    <crm_data>/master/calendar.json
+
+WICHTIG:
+- Keine Hardcodes wie /data/m365/*
+- Keine direkten /data/contacts.json Zugriffe
+- Pfadauflösung erfolgt ausschließlich über settings_crm.php + Helper
 
 Trigger:
 - Cron ruft minütlich auf (HTTP oder CLI)
-- Reader entscheidet pro Bereich (contacts/calendar/mail) anhand interval_sec, user-permissions
+- Reader entscheidet pro Bereich (contacts/calendar/mail)
+  anhand interval_sec und user-permissions
 
 Security (HTTP):
-- Token in /config/m365/secrets_m365.php:
+- Token in <crm_config>/m365/secrets_m365.php:
   ['m365']['jobs_access_token']  (Query: ?token=...)
 
 API-/Include-Verhalten:
-- Wenn define('CRM_IS_API', true) gesetzt ist (via api_m365_read.php), erzeugt der Reader KEINE eigene HTTP-Ausgabe
+- Wenn define('CRM_IS_API', true) gesetzt ist (via api_m365_read.php),
+  erzeugt der Reader KEINE eigene HTTP-Ausgabe
   und gibt nur 1|0 zurück (für Wrapper JSON).
 
 Force:
@@ -32,6 +44,7 @@ Logging:
 - Channel: LOG_CHANNEL = 'm365_read'
 ================================================================================
 */
+
 
 $MOD = 'm365';
 define('LOG_CHANNEL', 'm365_read');
@@ -844,7 +857,7 @@ function FN_M365_WriteJsonFileAtomic(string $file, array $payload, bool $pretty)
     $json = json_encode($payload, $flags);
     if ($json === false) { return false; }
 
-    if (@file_put_contents($tmp, $json . "\n") === false) { return false; }
+    if (@file_put_contents($tmp, $json . "\n", LOCK_EX) === false) { return false; }
 
     return @rename($tmp, $file);
 }

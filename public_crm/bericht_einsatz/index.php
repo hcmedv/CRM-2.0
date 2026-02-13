@@ -47,7 +47,8 @@ if (!empty($_SESSION['crm_user']['display_name'])) {
   <div class="card__title">Bericht Einsatz</div>
   <div class="card__body">
 
-    <form id="frm_be" method="post" action="./send.php" autocomplete="off">
+    <form id="frm_be" method="post" action="./crm_bericht_einsatz_send.php" autocomplete="off">
+
 
       <input type="hidden" id="default_mitarbeiter" value="<?= h($defaultMitarbeiter); ?>">
 
@@ -247,26 +248,25 @@ if (!empty($_SESSION['crm_user']['display_name'])) {
             <div></div>
           </div>
 
-          <div id="be_einsatz_list" class="be_list"></div>
+          <div class="be_e_wrap">
+            <div id="be_einsatz_list" class="be_list"></div>
 
-          <div class="be_actions be_actions--sum">
-            <div class="muted">
-              Gesamt: <span id="be_sum_minutes">0</span> min <span id="be_sum_hours" class="be_sum_hours"></span>
+            <!-- Summe + Add unten (gleiche Zeile) -->
+            <div class="be_actions be_actions--sum">
+              <div class="muted">
+                Gesamt: <span id="be_sum_minutes">0</span> min <span id="be_sum_hours" class="be_sum_hours"></span>
+              </div>
+              <button class="crm-btn crm-btn--icon crm-btn--primary"
+                      type="button" id="be_btn_add_einsatz" aria-label="Einsatzzeile hinzufügen">+</button>
             </div>
-            <div class="be_spacer"></div>
-            <button class="crm-btn crm-btn--icon crm-btn--primary"
-                    type="button" id="be_btn_add_einsatz" aria-label="Einsatzzeile hinzufügen">+</button>
           </div>
 
           <hr class="be_sep">
 
           <!-- Tätigkeiten -->
           <div class="be_subtitle">Tätigkeiten</div>
-
           <div id="be_tasks_list" class="be_list"></div>
-
-          <div class="be_actions">
-            <div class="be_spacer"></div>
+          <div class="be_actions be_actions--tasks">
             <button class="crm-btn crm-btn--icon crm-btn--primary"
                     type="button" id="be_btn_add_task" aria-label="Tätigkeit hinzufügen">+</button>
           </div>
@@ -275,11 +275,8 @@ if (!empty($_SESSION['crm_user']['display_name'])) {
 
           <!-- Material -->
           <div class="be_subtitle">Material</div>
-
           <div id="be_material_list" class="be_list"></div>
-
-          <div class="be_actions">
-            <div class="be_spacer"></div>
+          <div class="be_actions be_actions--material">
             <button class="crm-btn crm-btn--icon crm-btn--primary"
                     type="button" id="be_btn_add_material" aria-label="Materialzeile hinzufügen">+</button>
           </div>
@@ -304,12 +301,12 @@ if (!empty($_SESSION['crm_user']['display_name'])) {
               <div class="be_choices">
                 <label class="be_chk">
                   <input type="checkbox" id="be_ab_done" name="ab_done" value="1">
-                  Auftrag - <span class="be_abnahme">beendet</span>, Dienstleistung <span class="be_abnahme">überprüft und abgeschlossen.</span> 
+                  Auftrag - <span class="be_abnahme">beendet</span>, Dienstleistung <span class="be_abnahme">überprüft und abgeschlossen.</span>
                 </label>
 
                 <label class="be_chk">
                   <input type="checkbox" id="be_ab_open" name="ab_open" value="1">
-                  Auftrag - offen, weitere Dienstleistungen notwendig. 
+                  Auftrag - offen, weitere Dienstleistungen notwendig.
                 </label>
               </div>
 
@@ -317,7 +314,6 @@ if (!empty($_SESSION['crm_user']['display_name'])) {
             </div>
           </div>
 
-          <!-- WICHTIG: IDs wieder auf "main", damit dein JS passt -->
           <div class="be_row">
             <div class="be_col be_col--grow">
               <label class="label" for="be_sig_main_name">Name (Unterzeichner) <span class="req">*</span></label>

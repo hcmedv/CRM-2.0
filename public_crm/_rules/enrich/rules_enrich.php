@@ -16,9 +16,9 @@ declare(strict_types=1);
  *
  * Erwartete Keys in settings_crm.php:
  *   'files' => [
- *     'KUNDEN_JSON'           => '/data/kunden.json',
- *     'KUNDEN_PHONE_MAP_JSON' => '/data/kunden_phone_map.json',
- *     'CONTACTS_JSON'         => '/data/contacts.json',
+ *     'KUNDEN_JSON'           => '<crm_data>/master/kunden.json',
+ *     'KUNDEN_PHONE_MAP_JSON' => '<crm_data>/master/kunden_phone_map.json',
+ *     'CONTACTS_JSON'         => '<crm_data>/master/contacts.json',
  *   ]
  *
  * Ablauf:
@@ -30,6 +30,7 @@ declare(strict_types=1);
  * Export:
  * - RULES_ENRICH_Apply(array $eventPatch, array $ctx = []): array
  */
+
 
 /* ===================================================================================================================== */
 /* ENTRYPOINT                                                                                                           */

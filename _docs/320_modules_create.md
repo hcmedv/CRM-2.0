@@ -1,193 +1,236 @@
-# 320_modules_create.md
-
-
-# Neues Modul anlegen (CRM v2)
+# 320 – Module: Erstellung & Struktur (CRM V2)
 
 ## Ziel
-Ein neues Modul (z. B. `vorgang`) so anlegen, dass:
-- es über `settings_crm.php` aktiviert wird,
-- es in der Navigation erscheint,
-- die Seite(n) geladen werden können,
-- optionale Modul-Assets (`css/js`) automatisch eingebunden werden,
-- Modul-spezifische Settings/Secrets per Bootstrap automatisch geladen werden.
+
+Ein Modul ist eine klar abgegrenzte Funktionseinheit im CRM.
+
+Module dürfen:
+
+- Daten liefern
+- Daten transformieren
+- Events erzeugen (über Writer)
+- UI-Komponenten bereitstellen
+
+Module dürfen nicht:
+
+- direkt auf events.json zugreifen
+- workflow.state setzen
+- Root-Struktur von Events eigenständig verändern
+- absolute Pfade verwenden
 
 ---
 
-## 1) Modul in `config/settings_crm.php` aktivieren
+# 1. Modul-Typen
 
-### 1.1 Module-Flag setzen
-In `config/settings_crm.php`:
+Ein Modul kann sein:
 
-```php
-'modules' => [
-  // ...
-  'vorgang' => true,
-],
+- Integration (pbx, teamviewer, m365, etc.)
+- Fachmodul (vorgang, bericht, camera, etc.)
+- Hilfsmodul (search, export, tools)
 
-1.2 Navigation erweitern
+---
 
-In config/settings_crm.php:
+# 2. Verzeichnisstruktur
 
+## Code (Public)
 
-'nav' => [
-  ['key' => 'start',   'label' => 'Start',   'href' => '/'],
-  ['key' => 'vorgang', 'label' => 'Vorgang', 'href' => '/vorgang/'],
-  // ...
-],
+Beispiel:
 
-Hinweis: key muss zu CRM_PAGE_ACTIVE passen.
+```
+/public_crm/<modul>/
+/public_crm/api/<modul>/
+```
 
-2) Modul-Settings-Datei anlegen
+## Konfiguration
 
-Pfad:
+```
+<crm_config>/<modul>/settings_<modul>.php
+<crm_config>/<modul>/secrets_<modul>.php
+```
 
-config/<modul>/settings_<modul>.php
+Secrets sind optional.
 
-Beispiel config/vorgang/settings_vorgang.php:
+---
 
-<?php
-declare(strict_types=1);
+# 3. Modul-Daten (NEUE REGEL)
 
-return [
-  'vorgang' => [
-    'debug' => true,
+Globale Struktur in `settings_crm.php`:
 
-    // Optional: Asset-Liste (wenn mehr als 1 css/js benötigt wird)
-    // Wenn nicht gesetzt: Fallback auf /vorgang/assets/crm_vorgang.css|js (falls vorhanden)
-    'assets' => [
-      'css' => [
-        'assets/crm_vorgang.css',
-      ],
-      'js' => [
-        'assets/crm_vorgang.js',
-      ],
-    ],
-  ],
-];
-
-
-3) Modul-Secrets-Datei anlegen (optional)
-
-Pfad:
-
-config/<modul>/secrets_<modul>.php
-
-Wichtig: immer doppelt gekapselt (outer key = Modulname).
-
-Beispiel config/vorgang/secrets_vorgang.php:
-
-<?php
-declare(strict_types=1);
-
-return [
-  'vorgang' => [
-    // 'api_token' => '...',
-  ],
-];
-
-4) Modul-Webroot / Seitenstruktur anlegen
-
-Empfohlene Struktur:
-
-public_crm/
-  vorgang/
-    index.php
-    assets/
-      crm_vorgang.css
-      crm_vorgang.js
-
-public_crm/vorgang/index.php (Basis-Seite)
-<?php
-declare(strict_types=1);
-
-$MOD = 'vorgang';
-
-define('CRM_PAGE_TITLE',  'Vorgang');
-define('CRM_PAGE_ACTIVE', 'vorgang');
-define('CRM_SUBNAV_HTML', '<a class="subnav__chip subnav__chip--active" href="#">Übersicht</a>');
-
-require_once __DIR__ . '/../_inc/bootstrap.php';
-require_once CRM_ROOT . '/_inc/auth.php';
-CRM_Auth_RequireLogin();
-
-require_once CRM_ROOT . '/_inc/page_top.php';
-?>
-
-<div class="grid grid--start">
-
-  <section class="card">
-    <div class="card__title">Vorgänge</div>
-    <div class="card__body"></div>
-  </section>
-
-  <section class="card">
-    <div class="card__title">Dokumente</div>
-    <div class="card__body"></div>
-  </section>
-
-  <section class="card">
-    <div class="card__title">Stammdaten</div>
-    <div class="card__body"></div>
-  </section>
-
-  <section class="card card--wide">
-    <div class="card__title">Status</div>
-    <div class="card__body"></div>
-  </section>
-
-</div>
-
-<?php require_once CRM_ROOT . '/_inc/page_bottom.php'; ?>
-
-
-Wichtig:
-
-$MOD = 'vorgang'; muss vor page_top.php gesetzt sein, damit Modul-Assets eingebunden werden.
-
-CRM_PAGE_ACTIVE muss dem nav.key entsprechen.
-
-5) Modul-Assets anlegen (leer reicht)
-5.1 public_crm/vorgang/assets/crm_vorgang.css
-/* Modul: vorgang */
-
-5.2 public_crm/vorgang/assets/crm_vorgang.js
-// Modul: vorgang
-
-
-Wenn du keine Dateien anlegst, wird auch nichts eingebunden (Fallback prüft is_file(...)).
-
-6) Modul-Datenpfade (Konvention)
-
-Global in settings_crm.php:
-
+```
 'paths' => [
-  'data' => $ROOT . '/data',
-  'log'  => $ROOT . '/log',
-  'tmp'  => $ROOT . '/tmp',
-],
+  'root'          => $ROOT,
+  'crm_data'      => $ROOT . '/_crm_data',
+  'crm_config'    => $ROOT . '/_crm_config',
+  'crm_archiv'    => $ROOT . '/_crm_archiv',
+  'kunden_storage'=> $ROOT . '/_storage_kunden',
+  'log'           => $ROOT . '/log',
+  'tmp'           => $ROOT . '/tmp',
+]
+```
 
+---
 
-Konvention pro Modul:
+# 320 – Module: Erstellung & Struktur (CRM V2)
 
-CRM_MOD_PATH('<modul>', 'data') → <paths.data>/<modul>
+## Konvention pro Modul
 
-Beispiel: CRM_MOD_PATH('vorgang','data') → /data/vorgang
+Moduldaten liegen unter:
 
-In Modul-Settings daher nur Dateinamen speichern, nicht absolute Pfade.
+```
+<crm_data>/modules/<modul>/
+```
 
-7) Checkliste (Minimal)
+Zugriff erfolgt ausschließlich über:
 
- config/settings_crm.php: Modul in modules aktiv
+```
+CRM_MOD_PATH('<modul>', 'data')
+```
 
- config/settings_crm.php: Nav-Eintrag vorhanden
+Beispiel:
 
- config/<modul>/settings_<modul>.php vorhanden (return ['<modul>'=>...])
+```
+CRM_MOD_PATH('vorgang','data')
+→ <crm_data>/modules/vorgang/
+```
 
- public_crm/<modul>/index.php vorhanden
+WICHTIG:
 
- $MOD = '<modul>'; in der Seite gesetzt
+In Modul-Settings dürfen nur Dateinamen stehen.
+Keine absoluten Pfade.
+Keine Hardcodes.
+Keine direkten Referenzen auf <crm_data>.
 
- optional: public_crm/<modul>/assets/crm_<modul>.css|js vorhanden
+Beispiel (zulässig):
 
- optional: config/<modul>/secrets_<modul>.php (wrapped keys)
- 
+```
+'file_current' => 'vorgang_current.json'
+```
+
+Nicht zulässig (Altstruktur / Hardcode):
+
+```
+'/data/vorgang/vorgang_current.json'
+'/ _crm_data/modules/vorgang/vorgang_current.json'
+```
+
+---
+
+# 4. Logs pro Modul
+
+Modullogs liegen unter:
+
+```
+<log>/<modul>/
+```
+
+Zugriff:
+
+```
+CRM_MOD_PATH('<modul>', 'log')
+```
+
+---
+
+# 5. Archiv pro Modul (optional)
+
+Falls benötigt:
+
+```
+<crm_archiv>/<modul>/
+```
+
+Nur für technische Archive.
+Nicht für Kundendokumente.
+
+---
+
+# 6. Event-Erzeugung (verbindlich)
+
+Module dürfen Events nur erzeugen über:
+
+```
+crm_events_write.php
+```
+
+oder über:
+
+```
+CRM_EventGenerator::upsert()
+```
+
+Module dürfen niemals:
+
+- events.json direkt öffnen
+- file_put_contents auf events.json machen
+- Merge-Logik selbst implementieren
+
+---
+
+# 7. Trigger-Regel (ESSENTIELL)
+
+Module, die als Trigger fungieren (pbx, teamviewer, etc.):
+
+dürfen nur setzen:
+
+- refs
+- timing
+- meta.<source>.*
+
+dürfen niemals setzen:
+
+- workflow.state
+- workflow.priority
+- created_at
+- updated_at
+
+Diese werden vom Writer kontrolliert.
+
+---
+
+# 8. Kundendaten gehören NICHT ins Modul
+
+Wenn ein Modul Dokumente erzeugt (z. B. camera, bericht, analyse):
+
+Speicherort ist:
+
+```
+<kunden_storage>/<KN>/<modul>/<jahr>/<typ>/
+```
+
+NICHT:
+
+```
+<crm_data>/modules/<modul>/
+```
+
+Moduldaten sind Systemdaten.
+Kundendokumente sind Storage-Daten.
+
+Strikte Trennung.
+
+---
+
+# 9. Pflichtprinzipien
+
+- Keine absoluten Pfade
+- Keine Hardcodes
+- Keine Root-Key-Manipulation
+- Keine direkte Event-Dateiverarbeitung
+- Snake_case
+- Additive Erweiterung
+
+---
+
+# 10. Fazit
+
+Ein Modul ist:
+
+- isoliert
+- erweiterbar
+- austauschbar
+- pfadunabhängig
+- workflow-neutral
+
+Systemdaten → <crm_data>  
+Kundendaten → <kunden_storage>  
+Events → zentraler Writer  

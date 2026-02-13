@@ -1,198 +1,264 @@
-# 119 – Structure: Data Layout
+# 119 – Structure: Data Layout (CRM V2)
 
 ## Ziel
 
-- Zentrale, verlässliche Log- und Debug-Struktur
-- Kein „ad-hoc echo / var_dump“
-- Klare Trennung zwischen:
-  - Entwickler-Debug
-  - Betriebs-Logs
-  - Sicherheitsrelevanten Logs
-- Einheitlich für alle Module
+Klare, langfristig skalierbare Datenstruktur.
+
+Trennung von:
+
+- System-Kern (Core)
+- Fach-Stammdaten (Master)
+- Modul-Daten (Integrationen)
+- Prozessdaten (Events)
+- Kunden-Dokumentenstruktur
+
+Diese Struktur ist strategisch gewählt.
+Keine zufällige Ablage.
 
 ---
 
-## Grundprinzipien
+# 1. Grundstruktur
 
-- **Alles Wichtige wird geloggt**
-- **Nichts Wichtiges wird nur im Browser ausgegeben**
-- Debug-Ausgaben sind **schaltbar**
-- Logs sind **textbasiert, lesbar, rotierbar**
+```
+<crm_data>/
+    core/
+    master/
+    modules/
+    events.json
+```
 
----
+Optional ergänzend:
 
-## Log-Ebenen
-
-Verwendete Level (angelehnt an PSR-3):
-
-- `debug`   – Entwicklerdetails
-- `info`    – normale Abläufe
-- `notice`  – auffällige, aber gültige Zustände
-- `warning` – unerwartet, aber weiter lauffähig
-- `error`   – Fehler, Aktion fehlgeschlagen
-- `critical`– sicherheits- oder systemkritisch
+```
+<crm_archiv>/
+<crm_log>/
+<crm_tmp>/
+```
 
 ---
 
-## Zentrale Log-Struktur
+# 2. Core (System-Kern)
 
-Basisverzeichnis: /log/
+Pfad:
+```
+<crm_data>/core/
+```
 
-Unterteilung:
+Enthält:
 
-/log/
-crm.log
-auth.log
-security.log
-events.log
-service_report.log
-cron.log
-error.log
+- users.json
+- roles.json (zukünftig)
+- permissions.json (optional)
+- system_flags.json (optional)
 
-Regeln:
-- **Ein Logfile pro Modul**
-- Zentrale Fehler zusätzlich in `error.log`
-- Kein Wildwuchs neuer Logdateien
+Definition:
+
+Core enthält ausschließlich System-relevante Daten,
+ohne die das CRM nicht existieren kann.
+
+Beispiele:
+
+- Benutzer
+- Rollen
+- Rechte
+- Systemzustände
+
+Core enthält KEINE fachlichen CRM-Daten.
 
 ---
 
-## Globale Logger-Funktion
+# 3. Master (Fach-Stammdaten)
 
-- Eine zentrale Logger-Implementierung
-- Zugriff über Helper-Funktion, z. B.:
+Pfad:
+```
+<crm_data>/master/
+```
 
-```php
-log_debug('events', 'Liste geladen', ['count' => 12]);
-log_error('auth', 'Login fehlgeschlagen', ['user' => $username]);
+Enthält:
 
-Regeln:
+- kunden.json
+- contacts.json
+- customer_phone_map.json
+- ggf. artikel.json
+- ggf. service_templates.json
 
-Kein direkter file_put_contents im Modul
+Definition:
 
-Log-Funktion entscheidet:
+Master enthält fachliche Stammdaten des CRM.
 
-Datei
+Diese Daten gehören dem CRM selbst.
+Sie sind nicht modulgebunden.
+Sie sind nicht externe Spiegel.
 
-Format
+Beispiele:
 
-Zeitstempel
+- Kunden
+- Ansprechpartner
+- interne Zuordnungen
+- Stamminformationen
 
-Kontext
-[2026-02-04 14:12:33] [events] [info] Event geladen id=01KG…
-[2026-02-04 14:12:33] [auth] [warning] Login failed {"user":"xxx","ip":"1.2.3.4"}
+Wichtig:
 
+Master ist keine technische Cache-Ebene.
+Master ist fachlich führend.
 
-Debug-Ausgabe (Browser)
-Globaler Debug-Schalter
+---
 
-In settings_crm.php:
+# 4. Modules (Integrationen)
 
-debug: true|false
+Pfad:
+```
+<crm_data>/modules/<modul>/
+```
 
-Wirkung:
+Beispiele:
 
-false:
+```
+<crm_data>/modules/pbx/
+<crm_data>/modules/teamviewer/
+<crm_data>/modules/m365/
+<crm_data>/modules/camera/
+```
 
-Keine PHP-Fehler im Browser
+Definition:
 
-Nur generische Fehlermeldungen
+Modules enthalten:
 
-true:
+- externe Rohdaten
+- Caches
+- technische Spiegel
+- Modul-spezifische Persistenz
 
-PHP-Errors sichtbar
+Beispiele:
 
-Debug-Overlays möglich
+- m365 contacts_cache.json
+- teamviewer poll_raw.json
+- pbx raw_store.json
+- camera upload_index.json
 
-Debug-Ausgabe (Browser)
-Globaler Debug-Schalter
+Wichtig:
 
-In settings_crm.php:
+Module-Daten sind NICHT fachlich führend.
+Sie sind Adapter-Zwischenschicht.
 
-debug: true|false
+---
 
-Wirkung:
+# 5. Events (Prozesscontainer)
 
-false:
+Pfad:
+```
+<crm_data>/events.json
+```
 
-Keine PHP-Fehler im Browser
+Definition:
 
-Nur generische Fehlermeldungen
+Events sind fachliche Prozesscontainer.
 
-true:
+Sie verbinden:
 
-PHP-Errors sichtbar
+- Auslöser (meta.*)
+- Workflow (workflow.state)
+- Zeit (timing)
+- Worklog
+- Referenzen
 
-Debug-Overlays möglich
+WICHTIG:
 
-Modul-Debug
+events.json darf ausschließlich gelesen und geschrieben werden durch:
 
-Jedes Modul kann zusätzlich einen Debug-Schalter besitzen:
+- crm_events_read.php
+- crm_events_write.php
+
+Keine API greift direkt auf events.json zu.
+
+Dies verhindert:
+
+- Dateikollisionen
+- Inkonsistente Zustände
+- Race Conditions
+
+---
+
+# 6. Kunden-Dokumentenstruktur
+
+Physische Kundendaten (PDF, Kamera, Analyse, Reports)
+liegen NICHT unter `<crm_data>`.
+
+Empfohlene Struktur:
+
+```
+<storage_kunden>/
+    <KN>/
+        <modul>/
+            <jahr>/
+                <typ>/
+                    dateien...
+```
 
 Beispiel:
 
-/config/events/settings_events.php
+```
+/_storage_kunden/10032/camera/2026/images/
+/_storage_kunden/10032/service/2026/reports/
+/_storage_kunden/10032/praxisanalyse/2026/json/
+```
 
-'debug' => true
+Regel:
 
+Kundendaten sind immer:
 
-Regeln:
+Modul → Jahr → Typ
 
-Modul-Debug erweitert nur Logging
+Nicht flach.
+Nicht gemischt.
 
-Globales Debug bleibt Master-Schalter
+---
 
-PHP Error Handling
+# 7. Was NICHT erlaubt ist
 
-Zentral initialisiert (früh im Bootstrap):
+Nicht erlaubt:
 
-set_error_handler
+```
+<crm_data>/kunden.json
+<crm_data>/mitarbeiter.json
+<crm_data>/calendar.json
+```
 
-set_exception_handler
+Keine flache Ablage.
 
-register_shutdown_function
+Keine Modul- und Core-Mischung.
 
-Verhalten:
+Keine externen Spiegel im Master-Bereich.
 
-Fehler → Logfile
+---
 
-Fatal Error → error.log
+# 8. Warum diese Struktur?
 
-Browser:
+Diese Struktur ermöglicht:
 
-Debug an → Details
+- klare Verantwortlichkeiten
+- Backup-Strategien pro Bereich
+- modulare Erweiterbarkeit
+- saubere Rechte-Modelle
+- spätere Mandantenfähigkeit
+- einfache Migration
 
-Debug aus → generische Seite
+Sie trennt:
 
-Was nicht erlaubt ist
+System
+Fachlogik
+Integration
+Prozess
+Dokumente
 
-echo, print_r, var_dump im Produktivcode
+---
 
-Debug-Ausgaben ohne Debug-Flag
+# 9. Zusammenfassung
 
-Fehler „schlucken“
+Core → System selbst  
+Master → CRM-Stammdaten  
+Modules → externe Adapter  
+Events → Prozesscontainer  
+Storage → physische Kundendaten  
 
-Security & Logging
-
-Login-Fehler → auth.log
-
-CSRF-Verstöße → security.log
-
-Rechteverletzungen → security.log
-
-Sensible Daten:
-
-nie im Klartext loggen
-
-keine Passwörter
-
-keine Tokens
-
-Ergebnis
-
-Nachvollziehbare Abläufe
-
-Schnelle Fehleranalyse
-
-Saubere Trennung von Debug & Betrieb
-
-Grundlage für spätere Monitoring-Tools
+Diese Struktur ist verbindlich für CRM V2.

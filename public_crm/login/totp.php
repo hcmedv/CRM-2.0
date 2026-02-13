@@ -6,7 +6,7 @@ declare(strict_types=1);
  * Zweck:
  * - 2FA (TOTP) Schritt nach Passwort-Login
  * - Nur für bereits eingeloggte User (PW ok), aber ohne 2FA-Flag
- * - Liest 2fa/2fa_secret aus /data/login/mitarbeiter.json
+ * - Liest 2fa/2fa_secret aus <crm_data>/core/users.json
  *
  * Hinweis:
  * - APIs bleiben außen vor (Option 1).

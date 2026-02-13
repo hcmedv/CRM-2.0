@@ -1,5 +1,48 @@
 <?php
 declare(strict_types=1);
+<?php
+declare(strict_types=1);
+
+/*
+ * Datei: /public_crm/_inc/crm_status.php
+ *
+ * Zweck:
+ * - Zentrale Statusverwaltung für CRM-Benutzer
+ * - Verwaltung von:
+ *     - manual_state   (auto|online|busy|away|off)
+ *     - pbx_busy       (bool)
+ *     - logged_in      (bool)
+ *     - updated_at     (timestamp|null)
+ *
+ * Datenquelle (verbindlich):
+ *   <crm_data>/core/users_status.json
+ *
+ * WICHTIG:
+ * - Diese Datei ist CORE-Logik.
+ * - Kein Zugriff auf /data/login/*
+ * - Kein Zugriff auf Public-Verzeichnisse.
+ * - Kein Modul darf Statusdateien selbst verwalten.
+ *
+ * Architektur:
+ * - Login setzt logged_in
+ * - api_user_status_set.php setzt manual_state
+ * - PBX setzt pbx_busy
+ * - CRM_Status_Effective() berechnet daraus den effektiven Zustand
+ *
+ * Effektiv-Logik:
+ *   1. logged_in = false       → off
+ *   2. manual_state != auto    → manual_state
+ *   3. pbx_busy = true         → busy
+ *   4. sonst                   → online
+ *
+ * Technische Regeln:
+ * - Atomic Write via .tmp + rename
+ * - Keine Fachlogik (keine Workflow-State-Änderung)
+ * - Kein Event-Zugriff
+ * - Reiner Core-Status-Container
+ */
+
+
 
 define('CRM_STATUS_FILE', __DIR__ . '/../../data/login/mitarbeiter_status.json');
 
@@ -24,9 +67,18 @@ function CRM_Status_Load(): array
 function CRM_Status_Save(array $db): bool
 {
     $tmp = CRM_STATUS_FILE . '.tmp';
-    $json = json_encode($db, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    if ($json === false) return false;
-    if (file_put_contents($tmp, $json, LOCK_EX) === false) return false;
+
+    $flags = JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
+
+    $json = json_encode($db, $flags);
+    if ($json === false) {
+        return false;
+    }
+
+    if (file_put_contents($tmp, $json . "\n", LOCK_EX) === false) {
+        return false;
+    }
+
     return rename($tmp, CRM_STATUS_FILE);
 }
 

@@ -5,13 +5,13 @@ declare(strict_types=1);
   Datei: /public_crm/api/user/api_user_status_public.php
   Zweck:
   - Public Status Endpoint (ohne Login), z. B. für service.hcmedv.de
-  - Liest /data/login/mitarbeiter_status.json (über CRM_LoginPath('status'))
+  - Liest <crm_data>/core/user_status.json (über CRM_LoginPath('status'))
   - Liefert NUR den effektiven Status: online | busy | away | off
 
   Logik:
-  - manual_state = away/off  -> away/off
+  - manual_state = away/off        -> away/off
   - manual_state = busy OR pbx_busy=true -> busy
-  - sonst -> online
+  - sonst                          -> online
 */
 
 

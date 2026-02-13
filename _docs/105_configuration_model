@@ -1,0 +1,317 @@
+# 105 – Configuration Model (CRM V2)
+
+## Ziel
+
+Klare, nachvollziehbare und erweiterbare Konfigurationsstruktur.
+
+Diese Datei definiert:
+
+- Wo kommt was her?
+- Wer darf was enthalten?
+- Welche Ebene ist wofür zuständig?
+- Was ist Konfiguration – und was nicht?
+
+Ziel ist es, Verwirrung zu vermeiden bei:
+
+- fehlenden Variablen
+- falschen Pfaden
+- vermischten Settings
+- nicht auffindbaren Secrets
+
+---
+
+# Grundprinzip
+
+Konfiguration ist hierarchisch aufgebaut.
+
+Nicht alles ist Konfiguration.
+
+Es gibt eine klare Trennung zwischen:
+
+- Struktur
+- Modul-Parameter
+- Secrets
+- Laufzeitdaten
+- Stammdaten
+
+---
+
+# Konfigurations-Ebenen
+
+## Ebene 1 – Systemkonfiguration (Global)
+
+Datei:
+
+```
+<crm_config>/settings_crm.php
+```
+
+Zweck:
+
+- Definition der globalen Struktur
+- Definition der Basis-Pfade
+- Systemweite Flags
+- Default-Parameter
+
+Beispiele:
+
+- paths
+- debug global
+- systemweite Limits
+
+Diese Datei darf:
+
+- KEINE Modulparameter enthalten
+- KEINE Secrets enthalten
+- KEINE Runtime-Daten enthalten
+
+Sie beschreibt nur das Systemgerüst.
+
+---
+
+## Ebene 2 – Modul-Konfiguration
+
+Dateien:
+
+```
+<crm_config>/<modul>/settings_<modul>.php
+```
+
+Zweck:
+
+- Modul-spezifische Parameter
+- Dateinamen
+- Endpunkte
+- Poll-Intervalle
+- Funktionsflags
+
+Beispiele:
+
+- api_url
+- filename_current
+- polling_interval
+- enable_feature_x
+
+Diese Datei darf:
+
+- KEINE Secrets enthalten
+- KEINE absoluten Pfade enthalten
+- KEINE Laufzeitdaten enthalten
+
+Wichtig:
+
+Es dürfen nur Dateinamen gespeichert werden.
+Pfadauflösung erfolgt über CRM_MOD_PATH().
+
+---
+
+## Ebene 3 – Modul-Secrets
+
+Dateien:
+
+```
+<crm_config>/<modul>/secrets_<modul>.php
+```
+
+Zweck:
+
+- API-Tokens
+- Credentials
+- Zugangsdaten
+
+Diese Datei darf nur enthalten:
+
+- Schlüssel
+- Tokens
+- geheime Endpunkte
+
+Secrets dürfen niemals:
+
+- in settings_<modul>.php stehen
+- in Git versioniert werden
+- in Logs ausgegeben werden
+
+---
+
+## Ebene 4 – Core-Daten (Runtime)
+
+Pfad:
+
+```
+<crm_data>/core/
+```
+
+Beispiele:
+
+- users.json
+- roles.json
+- permissions.json
+- system_flags.json
+
+Das sind keine Konfigurationsdateien.
+
+Das sind Laufzeitdaten.
+
+Sie ändern sich durch:
+
+- Benutzerverwaltung
+- Systemaktionen
+- Admin-Operationen
+
+---
+
+## Ebene 5 – Master-Daten (Stammdaten)
+
+Pfad:
+
+```
+<crm_data>/master/
+```
+
+Beispiele:
+
+- kunden.json
+- kontakte.json
+- mapping-Dateien
+- Lookup-Tabellen
+
+Diese Daten sind:
+
+- geschäftlich relevant
+- persistent
+- nicht Konfiguration
+
+---
+
+## Ebene 6 – Modul-Daten (technisch)
+
+Pfad:
+
+```
+<crm_data>/modules/<modul>/
+```
+
+Beispiele:
+
+- tv_poll_raw.json
+- vorgang_current.json
+- cache-Dateien
+
+Das sind technische Moduldaten.
+
+Nicht Konfiguration.
+Nicht Stammdaten.
+Nicht Kundendokumente.
+
+---
+
+## Ebene 7 – Kundendaten (physisch getrennt)
+
+Pfad:
+
+```
+<kunden_storage>/<KN>/<modul>/<jahr>/<typ>/
+```
+
+Beispiele:
+
+- PDF-Berichte
+- Kamera-Uploads
+- Analyse-JSON
+- Dokumentation
+
+Kundendaten sind niemals:
+
+- <crm_data>
+- Modul-Daten
+- Core-Daten
+
+Strikte Trennung.
+
+---
+
+# Konfigurations-Herkunftstabelle
+
+| Ebene | Speicherort | Zweck | Darf enthalten |
+|-------|--------------|-------|----------------|
+| System | settings_crm.php | Struktur | paths |
+| Modul | settings_<modul>.php | Verhalten | Parameter |
+| Secrets | secrets_<modul>.php | Zugangsdaten | Tokens |
+| Core | <crm_data>/core | Runtime | Benutzer |
+| Master | <crm_data>/master | Stammdaten | Kunden |
+| Module | <crm_data>/modules | Technisch | Cache |
+| Storage | <kunden_storage> | Kundendaten | Dokumente |
+
+---
+
+# Pfadauflösung (verbindlich)
+
+Module dürfen niemals:
+
+- absolute Pfade verwenden
+- eigene Pfadlogik implementieren
+
+Zugriff erfolgt ausschließlich über:
+
+- CRM_CFG('paths', ...)
+- CRM_MOD_CFG('<modul>', ...)
+- CRM_MOD_PATH('<modul>', ...)
+
+Wenn ein Pfad fehlt:
+
+→ das ist ein Konfigurationsfehler  
+→ kein Fallback  
+→ saubere Fehlerausgabe
+
+---
+
+# Verbotene Muster
+
+- '/data/<modul>/file.json'
+- '../config/...'
+- Hardcodierte Secrets
+- Direktzugriff auf events.json
+
+---
+
+# Erweiterbarkeit
+
+Dieses Modell erlaubt:
+
+- Mandantenfähigkeit
+- Modul-Isolation
+- Backup-Strategien
+- getrennte Restore-Ebenen
+- saubere CI/CD
+
+Ohne Strukturbruch.
+
+---
+
+# Entscheidender Merksatz
+
+Systemdaten ≠ Modul-Daten ≠ Stammdaten ≠ Kundendaten
+
+Und:
+
+Login ist keine Benutzerquelle.  
+Module sind keine Konfigurationsquelle.  
+Storage ist kein Systembereich.
+
+---
+
+# Fazit
+
+Konfiguration ist strukturell getrennt.
+
+Struktur → settings_crm.php  
+Modulverhalten → settings_<modul>.php  
+Secrets → secrets_<modul>.php  
+Runtime → <crm_data>/core  
+Stammdaten → <crm_data>/master  
+Technische Moduldaten → <crm_data>/modules  
+Kundendokumente → <kunden_storage>  
+
+Keine Vermischung.
+Keine impliziten Abhängigkeiten.
+Keine Fallbacks.

@@ -1,146 +1,210 @@
-# 118 – Structure: Security
+# 118 – Structure: Security (CRM V2)
 
 ## Ziel
 
-- Einheitliche, nachvollziehbare Sicherheitsstruktur
-- Kein implizites Verhalten
-- Trennung von Authentifizierung, Autorisierung und Schutzmechanismen
-- Gleiche Regeln für alle Module
+Verbindliche Sicherheits- und Zugriffsstruktur für CRM V2.
+
+Trennung von:
+
+- Authentifizierung (Login)
+- Benutzerverwaltung (Core)
+- Autorisierung (Rechte/ Rollen)
+- Fachlogik (Events / Workflow)
+- Kundendaten (Storage)
 
 ---
 
-## Sicherheits-Ebenen (Reihenfolge)
+# 1. Web-Zugänge
 
-1. Transport-Sicherheit (HTTPS)
-2. Session
-3. Authentifizierung (Login)
-4. Autorisierung (Rollen/Rechte)
-5. Request-Schutz (CSRF)
-6. Ausgabe-Schutz (Escaping)
+## CRM (intern)
 
----
+Login ausschließlich über:
 
-## Session-Handling
+```
+/public_crm/login/
+```
 
-- PHP-Session zentral initialisiert
-- Eine Session pro Benutzer
-- Session enthält **keine** fachlichen Daten
+Beispiele:
 
-Session-Inhalt (minimal):
-- `user_id`
-- `username`
-- `roles[]`
-- `login_ts`
-- `last_activity_ts`
+- /public_crm/login/index.php
+- /public_crm/login/totp.php
+- /public_crm/login/logout.php
 
-Regeln:
-- Session wird nach Login erneuert (Session-ID-Rotation)
-- Inaktive Sessions laufen ab (Timeout)
-- Logout zerstört Session vollständig
+Kein direkter Webzugriff auf:
+
+- <crm_data>
+- <crm_config>
+- <crm_archiv>
+- <kunden_storage>
+
+Diese liegen außerhalb Webroot.
 
 ---
 
-## Authentifizierung (Login)
+## Service (extern)
 
-- Login nur über `/login`
-- Zugang nur für CRM-Mitarbeiter
-- Benutzer stammen aus:
-  - `/data/login/mitarbeiter.json`
+Service-Portal ist getrennt:
 
-Benutzerfelder:
-- id
-- username
-- password_hash
-- email
-- roles[]
-- is_active
+```
+/public_service/
+```
 
-Regeln:
-- Kein Klartext-Passwort
-- Passwort-Hash ausschließlich serverseitig geprüft
-- Login-Status wird **nicht** über URL gesteuert
+Service darf nur explizit freigegebene Inhalte anzeigen.
+Keine internen CRM-Daten.
 
 ---
 
-## Autorisierung (Rollen)
+# 2. Benutzerquelle (verbindlich)
 
-- Rollen sind einfache Strings
-- Beispiele:
-  - `admin`
-  - `staff`
-  - `readonly`
+Benutzer stammen ausschließlich aus:
 
-Regeln:
-- Jede Seite prüft benötigte Rolle
-- Keine impliziten Rechte
-- Fehlende Rechte → 403
+```
+<crm_data>/core/users.json
+```
 
----
+Nicht zulässig als Benutzerquelle:
 
-## CSRF-Schutz
+- /public_crm/login/*
+- /data/login/*
+- Modulordnern (z. B. <crm_data>/modules/*)
+- Public-Bereich allgemein
 
-- Pflicht für **alle POST-Requests**
-- Gilt für:
-  - Formulare
-  - HTMX-Requests
-  - API-Aktionen (intern)
+Benutzerverwaltung ist Core-Verantwortung.
 
-Mechanik:
-- CSRF-Token pro Session
-- Token wird:
-  - im HTML eingebettet
-  - oder im Header gesendet
+Login ist nur Zugriffsschicht und besitzt keine eigene Benutzerstruktur.
 
-Ungültiger Token:
-- Request wird abgebrochen
-- Log-Eintrag
-- 403 Response
 
 ---
 
-## Freigegebene Routen (Whitelist)
+# 3. Authentifizierung
 
-Ohne Login erreichbar:
-- `/login`
-- `/login/check`
+Authentifizierung ist:
 
-Alle anderen Routen:
-- Login-Pflicht
+- technische Zugangskontrolle
+- Prüfung von Passwort
+- optional TOTP
 
----
+Authentifizierung erzeugt eine Session.
 
-## Modul-Grenzen
+Authentifizierung steuert niemals:
 
-- Module dürfen:
-  - Auth-Status abfragen
-  - Rollen prüfen
-- Module dürfen **nicht**:
-  - Sessions manipulieren
-  - Login-Logik überschreiben
+- workflow.state
+- event-Daten
+- Merge-Regeln
+- Business-Logik
 
 ---
 
-## Fehlerverhalten
+# 4. Autorisierung (Rollen / Rechte)
 
-- Sicherheitsfehler werden:
-  - geloggt
-  - nicht detailliert im Browser angezeigt
-- Keine Preisgabe interner Informationen
+Rollen und Rechte sind Core.
+
+Zukünftige Dateien:
+
+```
+<crm_data>/core/roles.json
+<crm_data>/core/permissions.json
+```
+
+Benutzerobjekte referenzieren Rollen.
+
+Autorisierung entscheidet:
+
+- welche UI-Funktionen sichtbar sind
+- welche APIs aufgerufen werden dürfen
 
 ---
 
-## Abgrenzung
+# 5. Event-Store Zugriffsschutz
 
-Security ist:
-- Infrastruktur
-- nicht Teil der Business-Logik
-- nicht optional
+events.json ist zentral und geschützt:
+
+```
+<crm_data>/events.json
+```
+
+Zugriff ausschließlich über:
+
+- crm_events_read.php
+- crm_events_write.php
+
+APIs dürfen niemals direkt auf events.json zugreifen.
+
+Dies verhindert:
+
+- Dateikollisionen
+- Race Conditions
+- inkonsistente Updates
 
 ---
 
-## Ergebnis
+# 6. Trigger-Sicherheitsregel
 
-- Einheitliches Sicherheitsmodell
-- Vorhersehbares Verhalten
-- Erweiterbar für spätere Anforderungen
-- Keine versteckten Sonderfälle
+Integrationen / Trigger (pbx, teamviewer, m365, etc.) dürfen:
+
+- timing liefern
+- refs liefern
+- meta.<source> befüllen
+
+Trigger dürfen niemals:
+
+- workflow.state setzen oder ändern
+- Root-Workflow steuern
+- Events schließen oder archivieren
+
+Triggerdaten leben ausschließlich in:
+
+meta.<source>.*
+
+---
+
+# 7. Datenbereiche (physische Trennung)
+
+Systemdaten:
+
+```
+<crm_data>/core/
+<crm_data>/master/
+<crm_data>/modules/
+<crm_data>/events.json
+```
+
+Kundendaten (Dokumente, Uploads):
+
+```
+<kunden_storage>/<KN>/<modul>/<jahr>/<typ>/
+```
+
+Regel:
+
+Systemdaten ≠ Kundendaten  
+Keine Vermischung.
+
+---
+
+# 8. Protokollierung / Logs
+
+Logs sind getrennt von Daten.
+
+Pfad (global):
+
+```
+<log>/
+```
+
+Logs dürfen keine Secrets enthalten.
+
+RAW-Stores sind optional und rein technisch (Debug/Replay).
+
+---
+
+# 9. Zusammenfassung
+
+Login → technische Authentifizierung  
+Users → Core-Daten  
+Rollen/Rechte → Core (zukünftig)  
+Events → fachliche Container  
+Trigger → nur meta + timing + refs  
+Storage → physische Kundendokumente  
+
+Verbindliche Trennung. Keine Ausnahmen.

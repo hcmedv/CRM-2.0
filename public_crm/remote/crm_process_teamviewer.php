@@ -60,7 +60,7 @@ function TVP_Log(string $mod, string $msg, array $ctx = []): void
     @file_put_contents(
         $file,
         json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
-        FILE_APPEND
+        FILE_APPEND | LOCK_EX
     );
 }
 

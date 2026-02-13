@@ -24,6 +24,10 @@ declare(strict_types=1);
  *
  * Hinweis:
  * - meta.ui.title_user === true wird respektiert (display.title wird nicht überschrieben).
+ * 
+ * - In der Doku explizit erwähnen: **nur Writer lädt Store mit Lock und schreibt**, alle anderen nutzen Read-Lib / APIs.
+ * - Für die Guards: **ALLOWED_* kommt ausschließlich aus Settings**, ohne stillen Fallback.
+
  */
 
 final class CRM_EventGenerator
